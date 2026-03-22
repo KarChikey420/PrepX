@@ -1,0 +1,29 @@
+# Core
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+python-multipart==0.0.20
+
+# Database
+motor==3.6.0
+beanie==1.27.0
+
+# Redis (Upstash REST-based)
+upstash-redis==1.1.0
+
+# AI / LLM (OpenAI-compatible client for Kimi K2 via NVIDIA)
+openai==1.58.1
+httpx==0.28.1
+
+# Voice Pipeline
+aiofiles==24.1.0
+websockets==14.1
+
+# Resilience & Observability
+tenacity==9.0.0
+structlog==24.4.0
+
+# Deployment
+python-dotenv==1.0.1

@@ -1,0 +1,36 @@
+### Health Check
+GET http://localhost:8000/health
+Accept: application/json
+
+### Initialize Interview Session
+# @name init_session
+POST http://localhost:8000/api/v1/interview/initialize
+Content-Type: application/json
+
+{
+    "role": "Backend Engineer",
+    "level": "senior",
+    "skills": ["python", "mongodb", "system_design"],
+    "user_email": "candidate@example.com",
+    "questions_per_skill": 2
+}
+
+###
+
+# Save the session ID from the previous request
+@session_id = {{init_session.response.body.session_id}}
+
+### WebSocket Streaming
+# Note: Standard HTTP REST clients cannot execute WebSocket connections.
+# Use Postman's WebSocket tool and connect to:
+# ws://localhost:8000/api/v1/interview/stream/{{session_id}}
+
+
+### Finalize Interview (Trigger Background Report)
+POST http://localhost:8000/api/v1/interview/{{session_id}}/finalize
+Accept: application/json
+
+
+### Get Interview Report
+GET http://localhost:8000/api/v1/interview/{{session_id}}/report
+Accept: application/json
