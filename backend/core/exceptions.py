@@ -81,24 +81,6 @@ class SessionExpiredError(AppBaseError):
 def register_exception_handlers(app: FastAPI) -> None:
     """Register all custom exception handlers on the FastAPI app."""
 
-    @app.exception_handler(AppBaseError)
-    async def handle_app_error(request: Request, exc: AppBaseError) -> JSONResponse:
-        logger.error(
-            "app.error",
-            error_type=type(exc).__name__,
-            message=exc.message,
-            status_code=exc.status_code,
-            path=str(request.url),
-        )
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": type(exc).__name__,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-
     @app.exception_handler(RateLimitError)
     async def handle_rate_limit(request: Request, exc: RateLimitError) -> JSONResponse:
         logger.warning(
@@ -118,6 +100,24 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "details": exc.details,
             },
             headers=headers,
+        )
+
+    @app.exception_handler(AppBaseError)
+    async def handle_app_error(request: Request, exc: AppBaseError) -> JSONResponse:
+        logger.error(
+            "app.error",
+            error_type=type(exc).__name__,
+            message=exc.message,
+            status_code=exc.status_code,
+            path=str(request.url),
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": type(exc).__name__,
+                "message": exc.message,
+                "details": exc.details,
+            },
         )
 
     @app.exception_handler(Exception)

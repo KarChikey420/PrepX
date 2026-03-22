@@ -109,11 +109,12 @@ async def health_check() -> dict:
     """
     Health check endpoint for load balancers and Docker HEALTHCHECK.
     """
+    import asyncio
     # Quick Redis check
     redis_status = "connected"
     try:
         client = get_redis()
-        client.ping()
+        await asyncio.to_thread(client.ping)
     except Exception:
         redis_status = "disconnected"
 

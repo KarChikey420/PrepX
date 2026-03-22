@@ -21,10 +21,6 @@ class SessionStatus(str, Enum):
     ERROR = "error"
 
 
-class TurnMetrics(Dict[str, Any]):
-    """Type alias for per-turn latency metrics."""
-    pass
-
 
 class InterviewSession(Document):
     """

@@ -74,7 +74,7 @@ async def initialize_interview(request: InitializeRequest) -> InitializeResponse
         target_skills=request.skills,
         questions_per_skill=request.questions_per_skill,
     )
-    await cache_session_state(session_id, state.model_dump())
+    cache_session_state(session_id, state.model_dump())
 
     # ── Link session to user history ───────────────────────────────
     if user_id:

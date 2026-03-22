@@ -42,7 +42,7 @@ def _session_key(session_id: str) -> str:
     return f"session:{session_id}"
 
 
-async def cache_session_state(session_id: str, state: dict[str, Any], ttl_seconds: int = 7200) -> None:
+def cache_session_state(session_id: str, state: dict[str, Any], ttl_seconds: int = 7200) -> None:
     """
     Pre-warm or update session state in Redis.
 
@@ -57,7 +57,7 @@ async def cache_session_state(session_id: str, state: dict[str, Any], ttl_second
     logger.debug("redis.session_cached", session_id=session_id, ttl=ttl_seconds)
 
 
-async def get_session_state(session_id: str) -> Optional[dict[str, Any]]:
+def get_session_state(session_id: str) -> Optional[dict[str, Any]]:
     """
     Retrieve cached session state from Redis.
 
@@ -73,20 +73,20 @@ async def get_session_state(session_id: str) -> Optional[dict[str, Any]]:
     return json.loads(raw)  # type: ignore[arg-type]
 
 
-async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+def update_session_state(session_id: str, updates: dict[str, Any]) -> dict[str, Any]:
     """
     Merge *updates* into the existing cached session state.
 
     If no cached state exists, the updates dict becomes the full state.
     Returns the updated state.
     """
-    current = await get_session_state(session_id) or {}
+    current = get_session_state(session_id) or {}
     current.update(updates)
-    await cache_session_state(session_id, current)
+    cache_session_state(session_id, current)
     return current
 
 
-async def delete_session_state(session_id: str) -> None:
+def delete_session_state(session_id: str) -> None:
     """Remove session state from Redis."""
     client = get_redis()
     client.delete(_session_key(session_id))
