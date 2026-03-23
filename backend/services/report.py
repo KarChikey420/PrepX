@@ -21,6 +21,16 @@ from services.agents.base import BaseAgent
 
 logger = structlog.get_logger(__name__)
 
+
+def _emit_report_to_terminal(session_id: str, report_md: str) -> None:
+    """Print the generated report to the backend terminal for local debugging."""
+    separator = "=" * 80
+    print(separator)
+    print(f"INTERVIEW REPORT [{session_id}]")
+    print(separator)
+    print(report_md)
+    print(separator)
+
 REPORT_SYSTEM_PROMPT = """\
 You are an expert technical interview analyst. Generate a comprehensive, \
 well-structured Markdown performance report based on the interview session data.
@@ -169,6 +179,7 @@ async def generate_session_report(session_id: str) -> None:
             session_id=session_id,
             report_length=len(report_md),
         )
+        _emit_report_to_terminal(session_id, report_md)
 
     except Exception:
         logger.exception("report.background_error", session_id=session_id)

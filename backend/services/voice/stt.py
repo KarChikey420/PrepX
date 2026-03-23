@@ -100,7 +100,7 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
                 "role": "user",
                 "content": (
                     f"Transcribe the following audio:\n"
-                    f'<audio src="data:audio/wav;base64,{audio_b64}" />'
+                    f'<audio src="data:audio/webm;codecs=opus;base64,{audio_b64}" />'
                 ),
             }
         ],

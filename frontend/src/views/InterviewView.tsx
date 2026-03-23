@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { AICore } from '../components/AICore';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -9,19 +9,20 @@ import { Mic, MicOff, CheckCircle } from 'lucide-react';
 
 interface InterviewViewProps {
   session: SessionData;
-  onComplete: () => void;
 }
 
-export function InterviewView({ session, onComplete }: InterviewViewProps) {
+export function InterviewView({ session }: InterviewViewProps) {
   const { 
     isConnected, 
     aiState, 
     messages, 
-    reportMarkdown, 
     sendAudioData, 
     signalTurnEnd, 
+    signalInterviewEnd,
     setAudioChunkHandler 
   } = useWebSocket(session.session_id);
+  const [isEnding, setIsEnding] = useState(false);
+  const [endMessage, setEndMessage] = useState<string | null>(null);
 
   const { enqueueAudio, initAudio } = useAudioPlayer();
   
@@ -36,13 +37,6 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
   useEffect(() => {
     setAudioChunkHandler(enqueueAudio);
   }, [setAudioChunkHandler, enqueueAudio]);
-
-  // Handle interview completion
-  useEffect(() => {
-    if (reportMarkdown) {
-      onComplete(); // Tells parent to switch to ReportView
-    }
-  }, [reportMarkdown, onComplete]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -64,11 +58,22 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
 
   const endSession = async () => {
     if (isRecording) stopRecording();
+    setIsEnding(true);
+    setEndMessage("Ending interview. The report will be printed in the backend terminal when it's ready.");
+
     try {
-      await fetch(`http://localhost:8000/api/v1/interview/${session.session_id}/finalize`, { method: 'POST' });
-      // The WebSocket will receive 'interview_complete' and update state shortly.
+      signalInterviewEnd();
+      const res = await fetch(`http://localhost:8000/api/v1/interview/${session.session_id}/finalize`, { method: 'POST' });
+
+      if (!res.ok) {
+        throw new Error(`Finalize failed with status ${res.status}`);
+      }
+
+      setEndMessage("Interview ended. Watch the backend terminal for the generated report.");
     } catch (e) {
       console.error(e);
+      setEndMessage("Could not finalize the interview. Check the backend terminal for details.");
+      setIsEnding(false);
     }
   };
 
@@ -115,7 +120,7 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
           <button 
             className={`btn-icon ${isRecording ? 'active' : ''}`}
             onClick={toggleMic}
-            disabled={!isConnected || aiState === 'speaking' || aiState === 'thinking'}
+            disabled={isEnding || !isConnected || aiState === 'speaking' || aiState === 'thinking'}
             title={isRecording ? "Stop Recording & Submit" : "Hold or Click to Speak"}
           >
             {isRecording ? <MicOff size={24} /> : <Mic size={24} />}
@@ -131,10 +136,17 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
             className="btn btn-primary" 
             style={{padding: '0.75rem 1rem'}}
             onClick={endSession}
+            disabled={isEnding}
           >
             <CheckCircle size={18} /> End Interview
           </button>
         </div>
+
+        {endMessage && (
+          <div style={{ marginTop: '1rem', color: 'var(--accent-cyan)', fontSize: '0.95rem' }}>
+            {endMessage}
+          </div>
+        )}
       </div>
     </div>
   );

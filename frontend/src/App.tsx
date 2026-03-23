@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { SetupView } from './views/SetupView';
 import { InterviewView } from './views/InterviewView';
-import { ReportView } from './views/ReportView';
 import type { SessionData } from './types';
 
-type AppState = 'setup' | 'interview' | 'report';
+type AppState = 'setup' | 'interview';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('setup');
@@ -13,15 +12,6 @@ export default function App() {
   const handleInitialize = (data: SessionData) => {
     setSession(data);
     setAppState('interview');
-  };
-
-  const handleInterviewComplete = () => {
-    setAppState('report');
-  };
-
-  const handleRestart = () => {
-    setSession(null);
-    setAppState('setup');
   };
 
   return (
@@ -48,11 +38,7 @@ export default function App() {
       {appState === 'setup' && <SetupView onInitialize={handleInitialize} />}
       
       {appState === 'interview' && session && (
-        <InterviewView session={session} onComplete={handleInterviewComplete} />
-      )}
-      
-      {appState === 'report' && session && (
-        <ReportView session={session} onRestart={handleRestart} />
+        <InterviewView session={session} />
       )}
     </div>
   );

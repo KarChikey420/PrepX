@@ -29,7 +29,7 @@ from services.agents.evaluator import EvaluatorAgent
 from services.agents.interviewer import InterviewerAgent
 from services.agents.mentor import MentorAgent
 from services.voice.stt import AudioBuffer, transcribe_audio
-from services.voice.tts import stream_tts
+from services.voice.tts import synthesize_full
 
 logger = structlog.get_logger(__name__)
 
@@ -377,13 +377,11 @@ async def _generate_and_send_question(
 
     # Stream TTS audio
     try:
-        chunk_sequence = 0
-        async for audio_chunk in stream_tts(full_question):
-            await ws.send_bytes(audio_chunk)
-            chunk_sequence += 1
+        full_audio = await synthesize_full(full_question)
+        await ws.send_bytes(full_audio)
 
         # Signal end of audio
-        await _send_json(ws, "audio_complete", {"chunks_sent": chunk_sequence})
+        await _send_json(ws, "audio_complete", {"chunks_sent": 1})
 
     except Exception as e:
         logger.error("ws.tts_error", error=str(e), session_id=session_id)

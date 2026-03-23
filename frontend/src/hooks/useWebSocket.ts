@@ -120,6 +120,12 @@ export function useWebSocket(sessionId: string | null) {
     }
   }, []);
 
+  const signalInterviewEnd = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+    }
+  }, []);
+
   const setAudioChunkHandler = useCallback((handler: (chunk: Blob) => void) => {
     onAudioChunkRef.current = handler;
   }, []);
@@ -132,6 +138,7 @@ export function useWebSocket(sessionId: string | null) {
     reportMarkdown,
     sendAudioData,
     signalTurnEnd,
+    signalInterviewEnd,
     setAudioChunkHandler
   };
 }
