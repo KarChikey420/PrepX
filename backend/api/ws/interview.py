@@ -378,16 +378,20 @@ async def _generate_and_send_question(
     # Stream TTS audio
     try:
         full_audio = await synthesize_full(full_question)
-        await ws.send_bytes(full_audio)
-
-        # Signal end of audio
-        await _send_json(ws, "audio_complete", {"chunks_sent": 1})
+        if full_audio:
+            await ws.send_bytes(full_audio)
+            await _send_json(ws, "audio_complete", {"chunks_sent": 1})
+        else:
+            await _send_json(ws, "audio_complete", {
+                "chunks_sent": 0,
+                "error": "TTS unavailable - continuing in text-only mode.",
+            })
 
     except Exception as e:
         logger.error("ws.tts_error", error=str(e), session_id=session_id)
         await _send_json(ws, "audio_complete", {
             "chunks_sent": 0,
-            "error": "TTS failed — question was sent as text only.",
+            "error": "TTS failed - question was sent as text only.",
         })
 
     # Update Redis

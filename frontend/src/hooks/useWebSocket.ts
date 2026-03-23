@@ -16,6 +16,7 @@ export function useWebSocket(sessionId: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
   const onAudioChunkRef = useRef<((chunk: Blob) => void) | undefined>(undefined);
   const isFinalizingRef = useRef(false);
+  const hasShownTtsFallbackRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -96,6 +97,16 @@ export function useWebSocket(sessionId: string | null) {
       } else if (type === 'audio_complete') {
         // AI finished sending audio
         setAiState('idle');
+        if (data?.error && !hasShownTtsFallbackRef.current) {
+          hasShownTtsFallbackRef.current = true;
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'system',
+              content: 'Voice playback is unavailable right now. The interview will continue in text-only mode.',
+            },
+          ]);
+        }
       } else if (type === 'interview_complete') {
         ws.close();
         setAiState('idle');
