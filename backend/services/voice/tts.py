@@ -20,6 +20,7 @@ from core.config import settings
 from core.exceptions import ExternalAPIError, RateLimitError
 
 logger = structlog.get_logger(__name__)
+_tts_temporarily_unavailable = False
 
 
 async def stream_tts(
@@ -48,7 +49,13 @@ async def stream_tts(
         RateLimitError: If the API returns 429.
         ExternalAPIError: For other API failures.
     """
+    global _tts_temporarily_unavailable
+
     if not text.strip():
+        return
+
+    if _tts_temporarily_unavailable:
+        logger.info("tts.skipped_unavailable")
         return
 
     headers = {
@@ -92,12 +99,16 @@ async def stream_tts(
 
                 if response.status_code != 200:
                     body = await response.aread()
+                    if response.status_code == 404:
+                        _tts_temporarily_unavailable = True
                     raise ExternalAPIError(
                         service="NvidiaRivaTTS",
                         message=f"TTS request failed with status {response.status_code}",
                         details={
                             "status_code": response.status_code,
                             "body": body.decode("utf-8", errors="replace")[:500],
+                            "url": f"{settings.nvidia_riva_tts_base_url}/audio/speech",
+                            "model": settings.nvidia_riva_tts_model,
                         },
                     )
 

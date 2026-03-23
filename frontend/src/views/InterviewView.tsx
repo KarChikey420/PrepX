@@ -9,13 +9,15 @@ import { Mic, MicOff, CheckCircle } from 'lucide-react';
 
 interface InterviewViewProps {
   session: SessionData;
+  onComplete: () => void;
 }
 
-export function InterviewView({ session }: InterviewViewProps) {
+export function InterviewView({ session, onComplete }: InterviewViewProps) {
   const { 
     isConnected, 
     aiState, 
     messages, 
+    reportMarkdown,
     sendAudioData, 
     signalTurnEnd, 
     signalInterviewEnd,
@@ -38,41 +40,43 @@ export function InterviewView({ session }: InterviewViewProps) {
     setAudioChunkHandler(enqueueAudio);
   }, [setAudioChunkHandler, enqueueAudio]);
 
+  useEffect(() => {
+    if (reportMarkdown) {
+      onComplete();
+    }
+  }, [reportMarkdown, onComplete]);
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
     initAudio(); // Required to unlock Web Audio API on first interaction
     
     if (isRecording) {
-      stopRecording();
-      signalTurnEnd(); // Tell backend we finished speaking
+      await stopRecording();
+      signalTurnEnd(); // Tell backend we finished speaking after the last chunk is flushed
     } else {
       if (aiState === 'listening' || aiState === 'idle') {
-        startRecording();
+        await startRecording();
       }
     }
   };
 
   const endSession = async () => {
-    if (isRecording) stopRecording();
+    if (isRecording) {
+      await stopRecording();
+    }
     setIsEnding(true);
-    setEndMessage("Ending interview. The report will be printed in the backend terminal when it's ready.");
+    setEndMessage("Ending interview. The report will appear here after it finishes generating.");
 
     try {
       signalInterviewEnd();
-      const res = await fetch(`http://localhost:8000/api/v1/interview/${session.session_id}/finalize`, { method: 'POST' });
-
-      if (!res.ok) {
-        throw new Error(`Finalize failed with status ${res.status}`);
-      }
-
-      setEndMessage("Interview ended. Watch the backend terminal for the generated report.");
+      setEndMessage("Interview ended. Generating your report now.");
     } catch (e) {
       console.error(e);
-      setEndMessage("Could not finalize the interview. Check the backend terminal for details.");
+      setEndMessage("Could not end the interview cleanly. Check the backend logs for details.");
       setIsEnding(false);
     }
   };

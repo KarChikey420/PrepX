@@ -15,9 +15,13 @@ export function useWebSocket(sessionId: string | null) {
   
   const wsRef = useRef<WebSocket | null>(null);
   const onAudioChunkRef = useRef<((chunk: Blob) => void) | undefined>(undefined);
+  const isFinalizingRef = useRef(false);
 
   useEffect(() => {
     if (!sessionId) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
 
     // Connect standard WebSocket
     const ws = new WebSocket(`ws://localhost:8000/api/v1/interview/stream/${sessionId}`);
@@ -40,6 +44,19 @@ export function useWebSocket(sessionId: string | null) {
         }
       } catch {
         console.error('Fetch error');
+      }
+    };
+
+    const finalizeInterview = async (sid: string) => {
+      if (isFinalizingRef.current) return;
+      isFinalizingRef.current = true;
+
+      try {
+        await fetch(`http://localhost:8000/api/v1/interview/${sid}/finalize`, { method: 'POST' });
+      } catch (error) {
+        console.error('Finalize error', error);
+      } finally {
+        fetchReport(sid);
       }
     };
 
@@ -82,8 +99,7 @@ export function useWebSocket(sessionId: string | null) {
       } else if (type === 'interview_complete') {
         ws.close();
         setAiState('idle');
-        // Trigger report fetch
-        fetchReport(sessionId);
+        finalizeInterview(sessionId);
       } else if (type === 'error') {
         console.error("WS Server Error:", data.message);
         alert(`Error: ${data.message}`);
@@ -102,6 +118,9 @@ export function useWebSocket(sessionId: string | null) {
     return () => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.close();
+      }
+      if (wsRef.current === ws) {
+        wsRef.current = null;
       }
     };
   }, [sessionId]);

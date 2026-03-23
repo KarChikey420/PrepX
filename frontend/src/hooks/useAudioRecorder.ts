@@ -28,13 +28,20 @@ export function useAudioRecorder(onDataAvailable: (blob: Blob) => void) {
     }
   }, [onDataAvailable]);
 
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+  const stopRecording = useCallback(async () => {
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder && recorder.state === 'recording') {
+      await new Promise<void>((resolve) => {
+        recorder.addEventListener('stop', () => resolve(), { once: true });
+        recorder.stop();
+      });
     }
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
+
     setIsRecording(false);
   }, []);
 
