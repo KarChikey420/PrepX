@@ -10,6 +10,9 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -122,6 +125,11 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unhandled(request: Request, exc: Exception) -> JSONResponse:
+        if isinstance(exc, StarletteHTTPException):
+            return await http_exception_handler(request, exc)
+        if isinstance(exc, RequestValidationError):
+            return await request_validation_exception_handler(request, exc)
+
         logger.exception(
             "app.unhandled_error",
             error_type=type(exc).__name__,

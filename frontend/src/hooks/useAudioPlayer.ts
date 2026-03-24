@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
 export function useAudioPlayer() {
   const queueRef = useRef<Blob[]>([]);
@@ -6,12 +6,12 @@ export function useAudioPlayer() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize context on first user interaction required by browsers
-  const initAudio = () => {
+  const initAudio = useCallback(() => {
     if (!audioContextRef.current) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioContextRef.current = new AudioCtx();
     }
-  };
+  }, []);
 
   const decodeAndPlay = async (blob: Blob) => {
     if (!audioContextRef.current) return;
@@ -37,11 +37,16 @@ export function useAudioPlayer() {
       source.start();
     } catch {
       console.error("Audio playback error");
-      isPlayingRef.current = false;
+      if (queueRef.current.length > 0) {
+        const nextBlob = queueRef.current.shift();
+        if (nextBlob) decodeAndPlay(nextBlob);
+      } else {
+        isPlayingRef.current = false;
+      }
     }
   };
 
-  const enqueueAudio = (blob: Blob) => {
+  const enqueueAudio = useCallback((blob: Blob) => {
     initAudio();
     if (!isPlayingRef.current) {
       isPlayingRef.current = true;
@@ -49,7 +54,7 @@ export function useAudioPlayer() {
     } else {
       queueRef.current.push(blob);
     }
-  };
+  }, [initAudio]);
 
   // Cleanup
   useEffect(() => {

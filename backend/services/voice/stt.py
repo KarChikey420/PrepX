@@ -84,28 +84,19 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
     if not audio_bytes:
         return ""
 
-    # Encode audio to base64 for the NVIDIA API
-    audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-
     headers = {
         "Authorization": f"Bearer {settings.nematron_asr_stt}",
-        "Content-Type": "application/json",
         "Accept": "application/json",
     }
-
-    payload = {
+    
+    files = {
+        "file": ("audio.webm", audio_bytes, "audio/webm"),
+    }
+    
+    data = {
         "model": settings.nematron_stt_model,
-        "messages": [
-            {
-                "role": "user",
-                "content": (
-                    f"Transcribe the following audio:\n"
-                    f'<audio src="data:audio/webm;codecs=opus;base64,{audio_b64}" />'
-                ),
-            }
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.0,
+        "language": "en",
+        "response_format": "json",
     }
 
     logger.debug(
@@ -116,9 +107,10 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            f"{settings.nematron_stt_base_url}/chat/completions",
+            f"{settings.nematron_stt_base_url}/audio/transcriptions",
             headers=headers,
-            json=payload,
+            data=data,
+            files=files,
         )
 
     if response.status_code == 429:
@@ -135,8 +127,8 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
             details={"status_code": response.status_code, "body": response.text[:500]},
         )
 
-    data = response.json()
-    transcript = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    response_data = response.json()
+    transcript = response_data.get("text", "")
 
     logger.info(
         "stt.transcribed",

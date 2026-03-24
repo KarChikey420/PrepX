@@ -43,7 +43,10 @@ _interviewer = InterviewerAgent()
 
 async def _send_json(ws: WebSocket, msg_type: str, data: Dict[str, Any]) -> None:
     """Send a typed JSON message over the WebSocket."""
-    await ws.send_json({"type": msg_type, "data": data})
+    try:
+        await ws.send_json({"type": msg_type, "data": data})
+    except Exception:
+        pass
 
 
 async def _send_error(ws: WebSocket, message: str, recoverable: bool = True) -> None:
@@ -82,7 +85,7 @@ async def interview_stream(ws: WebSocket, session_id: str) -> None:
     state: SessionState | None = None
     try:
         # ── Load session state from Redis (0ms lookups) ────────────
-        cached_state = get_session_state(session_id)
+        cached_state = await get_session_state(session_id)
         if cached_state is None:
             # Fallback: load from MongoDB
             try:
@@ -258,7 +261,7 @@ async def _process_turn(
     # ── 3. Update Redis state ──────────────────────────────────────
     state.last_evaluation = eval_dict
     state.current_question_count += 1
-    update_session_state(session_id, state.model_dump())
+    await update_session_state(session_id, state.model_dump())
 
     # ── 4. Check skill progression ─────────────────────────────────
     is_last_question = state.current_question_count >= state.questions_per_skill
@@ -306,7 +309,7 @@ async def _process_turn(
                 "total_turns": len(state.conversation_history),
             })
             state.status = "completed"
-            update_session_state(session_id, state.model_dump())
+            await update_session_state(session_id, state.model_dump())
             return
 
     # ── 7. Generate and stream next question + TTS ─────────────────
@@ -379,7 +382,10 @@ async def _generate_and_send_question(
     try:
         full_audio = await synthesize_full(full_question)
         if full_audio:
-            await ws.send_bytes(full_audio)
+            try:
+                await ws.send_bytes(full_audio)
+            except Exception:
+                pass
             await _send_json(ws, "audio_complete", {"chunks_sent": 1})
         else:
             await _send_json(ws, "audio_complete", {
@@ -395,7 +401,7 @@ async def _generate_and_send_question(
         })
 
     # Update Redis
-    update_session_state(session_id, state.model_dump())
+    await update_session_state(session_id, state.model_dump())
 
 
 async def _persist_state(session_id: str, state: SessionState | None) -> None:

@@ -114,7 +114,7 @@ async def health_check() -> dict:
     redis_status = "connected"
     try:
         client = get_redis()
-        await asyncio.to_thread(client.ping)
+        await client.ping()
     except Exception:
         redis_status = "disconnected"
 

@@ -25,11 +25,11 @@ class Settings(BaseSettings):
     # ── LLM (Kimi K2 via NVIDIA) ──────────────────────────────────────
     kimi_api_key: str = Field(..., description="NVIDIA API key for Kimi K2")
     kimi_base_url: str = Field(
-        default="https://integrate.api.nvidia.com/v1",
+        default="https://api.moonshot.cn/v1",
         description="OpenAI-compatible base URL for Kimi K2",
     )
     kimi_model: str = Field(
-        default="moonshotai/kimi-k2",
+        default="moonshot-v1-8k",
         description="Model identifier for Kimi K2",
     )
 
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         description="Base URL for Nematron STT API",
     )
     nematron_stt_model: str = Field(
-        default="nvidia/parakeet-ctc-1.1b-asr",
+        default="b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
         description="Nematron STT model identifier",
     )
 
@@ -58,8 +58,12 @@ class Settings(BaseSettings):
         description="Base URL for NVIDIA Riva TTS API",
     )
     nvidia_riva_tts_model: str = Field(
-        default="nvidia/fastpitch-hifigan-tts",
+        default="877104f7-e885-42b9-8de8-f6e4c6303969",
         description="NVIDIA Riva TTS model identifier",
+    )
+    nvidia_riva_tts_voice: str = Field(
+        default="Magpie-Multilingual.EN-US.Aria",
+        description="NVIDIA Riva TTS voice identifier",
     )
 
     # ── Cache (Upstash Redis REST) ─────────────────────────────────────

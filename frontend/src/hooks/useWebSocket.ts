@@ -33,21 +33,6 @@ export function useWebSocket(sessionId: string | null) {
       setIsConnected(true);
     };
 
-    const fetchReport = async (sid: string) => {
-      try {
-        const res = await fetch(`http://localhost:8000/api/v1/interview/${sid}/report`);
-        const data = await res.json();
-        if (data.status === 'ready') {
-          setReportMarkdown(data.report_markdown);
-        } else {
-          // Poll every 3 seconds if generating
-          setTimeout(() => fetchReport(sid), 3000);
-        }
-      } catch {
-        console.error('Fetch error');
-      }
-    };
-
     const finalizeInterview = async (sid: string) => {
       if (isFinalizingRef.current) return;
       isFinalizingRef.current = true;
@@ -57,7 +42,7 @@ export function useWebSocket(sessionId: string | null) {
       } catch (error) {
         console.error('Finalize error', error);
       } finally {
-        fetchReport(sid);
+        setReportMarkdown("generating");
       }
     };
 
@@ -127,9 +112,8 @@ export function useWebSocket(sessionId: string | null) {
     };
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
+      // Force close regardless of ready state to prevent ghost connections
+      ws.close();
       if (wsRef.current === ws) {
         wsRef.current = null;
       }

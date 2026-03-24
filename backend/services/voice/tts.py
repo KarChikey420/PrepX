@@ -1,40 +1,38 @@
 """
 services.voice.tts
 ~~~~~~~~~~~~~~~~~~
-Text-to-Speech using NVIDIA Riva TTS via the NVIDIA API.
+Text-to-Speech using NVIDIA Riva TTS via the NVIDIA API (gRPC).
 
-Implements streaming TTS — text is sent to the API and audio byte
+Implements streaming TTS — text is sent to the gRPC API and audio byte
 chunks are yielded back as an async generator for real-time playback
 over WebSockets.
 """
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Optional
+import asyncio
+from typing import AsyncIterator
 
-import httpx
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+import riva.client
 import structlog
 
 from core.config import settings
-from core.exceptions import ExternalAPIError, RateLimitError
+from core.exceptions import ExternalAPIError
 
 logger = structlog.get_logger(__name__)
-_tts_temporarily_unavailable = False
 
 
 async def stream_tts(
     text: str,
-    voice: str = "English-US.Female-1",
+    voice: str | None = None,
     sample_rate: int = 22050,
     language_code: str = "en-US",
 ) -> AsyncIterator[bytes]:
     """
-    Stream TTS audio from NVIDIA Riva.
+    Stream TTS audio from NVIDIA Riva using the gRPC Python client.
 
     Sends text to the NVIDIA TTS API and yields audio byte chunks
-    as they arrive — enabling real-time audio streaming over WebSockets
-    without waiting for the entire audio file to render.
+    as they arrive natively.
 
     Args:
         text: The text to synthesize into speech.
@@ -44,77 +42,66 @@ async def stream_tts(
 
     Yields:
         Raw audio bytes (chunks) as they stream from the API.
-
-    Raises:
-        RateLimitError: If the API returns 429.
-        ExternalAPIError: For other API failures.
     """
-    global _tts_temporarily_unavailable
-
     if not text.strip():
         return
 
-    if _tts_temporarily_unavailable:
-        logger.info("tts.skipped_unavailable")
-        return
+    voice = voice or settings.nvidia_riva_tts_voice
 
-    headers = {
-        "Authorization": f"Bearer {settings.nvidia_riva_tts}",
-        "Content-Type": "application/json",
-        "Accept": "audio/wav",
-    }
-
-    payload = {
-        "model": settings.nvidia_riva_tts_model,
-        "input": text,
-        "voice": voice,
-        "response_format": "wav",
-        "sample_rate": sample_rate,
-        "language_code": language_code,
-    }
-
-    logger.debug(
-        "tts.streaming_start",
-        text_length=len(text),
-        voice=voice,
-        model=settings.nvidia_riva_tts_model,
-    )
-
-    total_bytes_yielded = 0
+    # Automatically swap the HTTP base URL out for the gRPC endpoint if using NVIDIA cloud
+    uri = settings.nvidia_riva_tts_base_url.replace("https://", "").replace("http://", "").split("/")[0]
+    if "integrate.api.nvidia.com" in uri or "ai.api.nvidia.com" in uri:
+        # The correct NVCF target for gRPC
+        uri = "grpc.nvcf.nvidia.com:443"
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{settings.nvidia_riva_tts_base_url}/audio/speech",
-                headers=headers,
-                json=payload,
-            ) as response:
-                if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    raise RateLimitError(
-                        service="NvidiaRivaTTS",
-                        retry_after=int(retry_after) if retry_after else None,
-                    )
+        # Use Riva client auth
+        auth = riva.client.Auth(
+            uri=uri,
+            use_ssl=True if "443" in uri else False,
+            metadata_args=[
+                ("authorization", f"Bearer {settings.nvidia_riva_tts}"),
+                ("function-id", settings.nvidia_riva_tts_model),
+            ],
+        )
 
-                if response.status_code != 200:
-                    body = await response.aread()
-                    if response.status_code == 404:
-                        _tts_temporarily_unavailable = True
-                    raise ExternalAPIError(
-                        service="NvidiaRivaTTS",
-                        message=f"TTS request failed with status {response.status_code}",
-                        details={
-                            "status_code": response.status_code,
-                            "body": body.decode("utf-8", errors="replace")[:500],
-                            "url": f"{settings.nvidia_riva_tts_base_url}/audio/speech",
-                            "model": settings.nvidia_riva_tts_model,
-                        },
-                    )
+        tts_service = riva.client.SpeechSynthesisService(auth)
 
-                async for chunk in response.aiter_bytes(chunk_size=4096):
-                    total_bytes_yielded += len(chunk)
-                    yield chunk
+        logger.debug(
+            "tts.streaming_start",
+            text_length=len(text),
+            voice=voice,
+            uri=uri,
+        )
+
+        # Offload the blocking generate call to a thread
+        def generate():
+            return tts_service.synthesize_online(
+                text=text,
+                voice_name=voice,
+                language_code=language_code,
+                sample_rate_hz=sample_rate,
+            )
+
+        responses = await asyncio.to_thread(generate)
+
+        # Iterate the chunks asynchronously so we don't freeze the FastAPI loop
+        def get_next(iterator):
+            try:
+                return next(iterator)
+            except StopIteration:
+                return None
+
+        total_bytes_yielded = 0
+
+        while True:
+            resp = await asyncio.to_thread(get_next, responses)
+            if resp is None:
+                break
+                
+            if resp.audio:
+                total_bytes_yielded += len(resp.audio)
+                yield resp.audio
 
         logger.info(
             "tts.streaming_complete",
@@ -122,24 +109,21 @@ async def stream_tts(
             total_audio_bytes=total_bytes_yielded,
         )
 
-    except (httpx.TimeoutException, httpx.ConnectError) as e:
-        logger.error("tts.connection_error", error=str(e))
+    except Exception as e:
+        logger.error("tts.grpc_error", error=str(e))
         raise ExternalAPIError(
-            service="NvidiaRivaTTS",
-            message=f"TTS connection failed: {e}",
+            service="NvidiaRivaTTS(gRPC)",
+            message=f"TTS gRPC failure: {e}",
         ) from e
 
 
 async def synthesize_full(
     text: str,
-    voice: str = "English-US.Female-1",
+    voice: str | None = None,
     sample_rate: int = 22050,
 ) -> bytes:
     """
     Non-streaming TTS: synthesize full audio and return all bytes at once.
-
-    Use this for short phrases where latency is less critical
-    (e.g., initial greeting).
     """
     chunks: list[bytes] = []
     async for chunk in stream_tts(text, voice=voice, sample_rate=sample_rate):

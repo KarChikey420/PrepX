@@ -20,6 +20,7 @@ httpx==0.28.1
 # Voice Pipeline
 aiofiles==24.1.0
 websockets==14.1
+nvidia-riva-client
 
 # Resilience & Observability
 tenacity==9.0.0
