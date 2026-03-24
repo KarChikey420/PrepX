@@ -11,6 +11,7 @@ over WebSockets.
 from __future__ import annotations
 
 import asyncio
+import struct
 from typing import AsyncIterator
 
 import riva.client
@@ -117,6 +118,30 @@ async def stream_tts(
         ) from e
 
 
+def create_wav_header(data_size: int, sample_rate: int = 22050, num_channels: int = 1, bits_per_sample: int = 16) -> bytes:
+    """Create a standard WAV header for raw PCM data."""
+    byte_rate = sample_rate * num_channels * (bits_per_sample // 8)
+    block_align = num_channels * (bits_per_sample // 8)
+    
+    header = struct.pack(
+        '<4sI4s4sIHHIIHH4sI',
+        b'RIFF',
+        36 + data_size,
+        b'WAVE',
+        b'fmt ',
+        16,  # Subchunk1Size for PCM
+        1,   # AudioFormat: PCM
+        num_channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        bits_per_sample,
+        b'data',
+        data_size
+    )
+    return header
+
+
 async def synthesize_full(
     text: str,
     voice: str | None = None,
@@ -128,4 +153,10 @@ async def synthesize_full(
     chunks: list[bytes] = []
     async for chunk in stream_tts(text, voice=voice, sample_rate=sample_rate):
         chunks.append(chunk)
-    return b"".join(chunks)
+        
+    pcm_data = b"".join(chunks)
+    if not pcm_data:
+        return b""
+        
+    wav_header = create_wav_header(len(pcm_data), sample_rate=sample_rate)
+    return wav_header + pcm_data

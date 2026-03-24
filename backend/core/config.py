@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         description="Base URL for Nematron STT API",
     )
     nematron_stt_model: str = Field(
-        default="b702f636-f60c-4a3d-a6f4-f3568c13bd7d",
+        default="openai/whisper-large-v3",
         description="Nematron STT model identifier",
     )
 
