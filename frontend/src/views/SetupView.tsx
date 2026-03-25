@@ -48,6 +48,7 @@ export function SetupView({ onInitialize }: SetupViewProps) {
       });
       
     } catch (err: unknown) {
+      console.error("Initialization error:", err);
       if (err instanceof Error) {
         setError(err.message || "Network error. Is the backend running?");
       } else {
@@ -59,26 +60,40 @@ export function SetupView({ onInitialize }: SetupViewProps) {
   };
 
   return (
-    <div className="setup-view glass-panel">
-      <h1 className="title">System Configuration</h1>
-      <p className="subtitle">Initialize the Voice Interview Matrix</p>
+    <div className="setup-view glass-card" style={{padding: '3rem', maxWidth: '600px', margin: '4rem auto'}}>
+      <div style={{textAlign: 'center', marginBottom: '2.5rem'}}>
+        <div style={{
+          width: '64px', height: '64px', borderRadius: '16px', 
+          background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          marginBottom: '1rem', boxShadow: '0 8px 20px var(--accent-glow)'
+        }}>
+          <Zap size={32} color="white" />
+        </div>
+        <h1 style={{fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem'}}>PrepX</h1>
+        <p style={{color: 'var(--text-secondary)', fontWeight: 500}}>AI-Powered Interview Simulator</p>
+      </div>
 
-      {error && <div style={{ color: 'var(--accent-rose)', marginBottom: '1rem' }}>{error}</div>}
+      {error && <div style={{ color: 'var(--red)', marginBottom: '1.5rem', textAlign: 'center' }}>{error}</div>}
 
-      <form onSubmit={handleSubmit}>
+      <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
         <div className="form-group">
-          <label className="form-label"><Briefcase size={16} style={{display: 'inline', marginRight: 8, verticalAlign: 'text-bottom'}} /> Role</label>
+          <label className="form-label" style={{color: 'var(--text-secondary)'}}>
+            <Briefcase size={14} style={{verticalAlign: 'middle', marginRight: '6px'}} /> Target Role
+          </label>
           <input 
             type="text" 
             className="form-input" 
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            required
+            placeholder="e.g. Fullstack Engineer"
           />
         </div>
 
         <div className="form-group">
-          <label className="form-label"><Zap size={16} style={{display: 'inline', marginRight: 8, verticalAlign: 'text-bottom'}} /> Level</label>
+          <label className="form-label" style={{color: 'var(--text-secondary)'}}>
+            <Zap size={14} style={{verticalAlign: 'middle', marginRight: '6px'}} /> Career Level
+          </label>
           <select 
             className="form-select"
             value={level}
@@ -89,22 +104,56 @@ export function SetupView({ onInitialize }: SetupViewProps) {
           </select>
         </div>
 
-        <div className="form-group">
-          <label className="form-label">Core Skills (comma separated)</label>
+        <div className="form-group" style={{marginBottom: '2rem'}}>
+          <label className="form-label" style={{color: 'var(--text-secondary)'}}>Focus Skills</label>
           <input 
             type="text" 
             className="form-input" 
             value={skillsInput}
             onChange={(e) => setSkillsInput(e.target.value)}
-            required
-            placeholder="e.g. React, Node.js, System Design"
+            placeholder="React, Node.js, AWS..."
           />
         </div>
 
-        <button type="submit" className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} disabled={isLoading}>
-          {isLoading ? 'Booting Core...' : <><Mic size={20} /> Initialize Session</>}
+        <button 
+          onClick={handleSubmit} 
+          className="btn-primary" 
+          style={{width: '100%', padding: '1.25rem', fontSize: '1.1rem'}} 
+          disabled={isLoading}
+        >
+          {isLoading ? 'Booting Core...' : <><Mic size={20} /> Start Voice Interview</>}
         </button>
-      </form>
+
+        <div style={{display: 'flex', alignItems: 'center', gap: '1rem', margin: '0.5rem 0'}}>
+          <div style={{flex: 1, height: '1px', background: 'var(--border)'}}></div>
+          <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600}}>OR</span>
+          <div style={{flex: 1, height: '1px', background: 'var(--border)'}}></div>
+        </div>
+
+        <button 
+          className="btn" 
+          style={{
+            width: '100%', padding: '1.25rem', fontSize: '1.1rem',
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            color: 'var(--text-primary)', transition: 'all 0.2s'
+          }}
+          onClick={() => window.location.hash = '#/resume-setup'}
+        >
+          <FileText size={20} style={{marginRight: '8px'}} /> Resume-Based Interview
+        </button>
+      </div>
     </div>
+  );
+}
+
+function FileText({ size, style }: any) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+      <polyline points="14 2 14 8 20 8"></polyline>
+      <line x1="16" y1="13" x2="8" y2="13"></line>
+      <line x1="16" y1="17" x2="8" y2="17"></line>
+      <polyline points="10 9 9 9 8 9"></polyline>
+    </svg>
   );
 }

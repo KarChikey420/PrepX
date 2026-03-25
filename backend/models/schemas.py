@@ -134,3 +134,67 @@ class WSError(BaseModel):
     type: str = "error"
     message: str
     recoverable: bool = True
+
+
+# ── Smart Interview (Resume-Based) Schemas ────────────────────────────
+
+
+class CandidateProfile(BaseModel):
+    """Extracted and analyzed data from a candidate's resume."""
+    candidate_name: str
+    experience_level: str
+    years_of_experience: int
+    technical_skills: List[str]
+    soft_skills: List[str]
+    past_roles: List[str]
+    projects: List[str]
+    job_title_applying_for: str
+    key_jd_requirements: List[str]
+    matched_skills: List[str]
+    skill_gaps: List[str]
+    interview_focus_areas: List[str]
+
+
+class ResumeUploadResponse(BaseModel):
+    """Returned after successful resume parsing and analysis."""
+    session_id: str
+    profile: CandidateProfile
+
+
+class SmartQuestion(BaseModel):
+    """A logically generated interview question based on the candidate's profile."""
+    id: int
+    type: str
+    difficulty: str
+    question: str
+    focus_area: str
+    expected_keywords: List[str]
+
+
+class SmartQuestionSet(BaseModel):
+    """Set of questions generated for a smart interview session."""
+    session_id: str
+    questions: List[SmartQuestion]
+
+
+class AnswerSubmission(BaseModel):
+    """Request schema for submitting a text answer to a smart question."""
+    session_id: str
+    question_id: int
+    answer: str
+
+
+class AnswerFeedback(BaseModel):
+    """Evaluation feedback for a single smart question answer."""
+    score: int
+    feedback: str
+    follow_up_question: Optional[str] = None
+
+
+class SmartReport(BaseModel):
+    """Final performance report for a resume-based smart interview."""
+    overall_score: float
+    strengths: List[str]
+    weak_areas: List[str]
+    readiness_verdict: str
+    recommendations: List[str]

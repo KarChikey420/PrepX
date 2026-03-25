@@ -71,6 +71,21 @@ class InterviewSession(Document):
     report_markdown: Optional[str] = Field(
         default=None, description="Generated Markdown performance report"
     )
+    
+    # -- Resume / Smart Interview fields --
+    candidate_name: Optional[str] = None
+    experience_level: Optional[str] = None
+    years_of_experience: Optional[int] = None
+    technical_skills: Optional[List[str]] = []
+    soft_skills: Optional[List[str]] = []
+    past_roles: Optional[List[str]] = []
+    projects: Optional[List[str]] = []
+    job_title_applying_for: Optional[str] = None
+    key_jd_requirements: Optional[List[str]] = []
+    matched_skills: Optional[List[str]] = []
+    skill_gaps: Optional[List[str]] = []
+    interview_focus_areas: Optional[List[str]] = []
+    resume_parsed: Optional[bool] = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

@@ -5,7 +5,7 @@ import { useRestInterview } from '../hooks/useRestInterview';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import type { SessionData } from '../types';
-import { Mic, MicOff, CheckCircle, RefreshCcw } from 'lucide-react';
+import { Mic, MicOff, RefreshCcw } from 'lucide-react';
 
 interface InterviewViewProps {
   session: SessionData;
@@ -96,85 +96,82 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
   };
 
   return (
-    <div className="interview-view">
-      {/* 3D Visualizer Side */}
-      <div className="glass-panel ai-core-container">
-        <div className="canvas-wrapper">
+    <div className="interview-view" style={{height: 'calc(100vh - 120px)', display: 'flex', gap: '2rem'}}>
+      {/* Visualizer Side */}
+      <div className="ai-core-container" style={{flex: 1, position: 'relative'}}>
+        <div className="glass-card" style={{height: '100%', overflow: 'hidden'}}>
           <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
             <AICore state={aiState} />
           </Canvas>
-        </div>
-        
-        <div className="ai-status-overlay">
-          <div className={`status-dot ${aiState}`}></div>
-          {aiState === 'idle' && 'SYSTEM READY'}
-          {aiState === 'listening' && 'LISTENING...'}
-          {aiState === 'thinking' && 'PROCESSING...'}
-          {aiState === 'speaking' && 'GENERATING AUDIO'}
+          <div className="ai-status-overlay">
+            <div className={`status-dot ${aiState}`} />
+            {aiState.toUpperCase()}
+          </div>
         </div>
       </div>
 
-      {/* Chat & Controls Side */}
-      <div className="interview-sidebar glass-panel">
-        
-        <div className="chat-box">
-          {messages.length === 0 && (
-            <div style={{color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem'}}>
-              Connection established. Waiting for AI initiation...
+      {/* interaction Sidebar */}
+      <div className="interview-sidebar" style={{width: '400px', display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+        <div className="glass-card" style={{flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+          <div className="chat-box" style={{flex: 1, padding: '1.5rem', overflowY: 'auto'}}>
+            {messages.length === 0 && (
+              <div style={{color: 'var(--text-muted)', textAlign: 'center', marginTop: '2rem'}}>
+                Connection established. Waiting for AI initiation...
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} className={`message ${m.role}`}>
+                <div style={{fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '0.4rem', opacity: 0.5, fontWeight: 700}}>
+                  {m.role}
+                </div>
+                {m.content}
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="controls-bar" style={{padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid var(--border)', textAlign: 'center'}}>
+            <button 
+              className={`btn-icon ${isRecording ? 'active' : ''}`}
+              style={{
+                width: '64px', height: '64px', margin: '0 auto 1rem',
+                background: isRecording ? 'var(--red)' : 'var(--accent)',
+                color: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: isRecording ? '0 0 20px rgba(239, 68, 68, 0.4)' : '0 0 20px rgba(99, 102, 241, 0.3)'
+              }}
+              onClick={toggleMic}
+              disabled={isEnding || !isConnected || aiState === 'speaking' || aiState === 'thinking'}
+            >
+              {isRecording ? <MicOff size={28} /> : <Mic size={28} />}
+            </button>
+            <div className="controls-hint" style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
+              {isRecording ? "Listening..." : "Click to speak"}
             </div>
-          )}
-          
-          {messages.map((msg, i) => (
-            <div key={i} className={`message ${msg.role}`}>
-              {msg.role === 'interviewer' && <strong>AI: </strong>}
-              {msg.role === 'candidate' && <strong>You: </strong>}
-              {msg.role === 'mentor' && <strong style={{color: 'var(--accent-cyan)'}}>Mentor: </strong>}
-              {msg.content.startsWith('{') ? null : msg.content}
-            </div>
-          ))}
-          <div ref={chatEndRef} />
+          </div>
         </div>
 
-        <div className="controls-bar">
+        <div style={{display: 'flex', gap: '1rem'}}>
           <button 
-            className={`btn-icon ${isRecording ? 'active' : ''}`}
-            onClick={toggleMic}
-            disabled={isEnding || !isConnected || aiState === 'speaking' || aiState === 'thinking'}
-            title={isRecording ? "Stop Recording & Submit" : "Hold or Click to Speak"}
+            className="btn" 
+            style={{flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '0.75rem'}}
+            onClick={regenerateQuestion}
+            disabled={isEnding || aiState !== 'idle'}
           >
-            {isRecording ? <MicOff size={24} /> : <Mic size={24} />}
+            <RefreshCcw size={18} /> Skip
           </button>
-          
-          <div className="controls-hint">
-            {isRecording 
-              ? 'Recording... Click to end turn.' 
-              : 'Click Mic to answer.'}
-          </div>
-
-          <div style={{display: 'flex', gap: '0.5rem'}}>
-            <button 
-              className="btn btn-secondary" 
-              style={{padding: '0.75rem 1rem'}}
-              onClick={regenerateQuestion}
-              disabled={isEnding || aiState !== 'idle'}
-              title="Skip this question and ask another one"
-            >
-              <RefreshCcw size={18} style={{marginRight: 8, display: 'inline'}} /> New Question
-            </button>
-
-            <button 
-              className="btn btn-primary" 
-              style={{padding: '0.75rem 1rem'}}
-              onClick={endSession}
-              disabled={isEnding}
-            >
-              <CheckCircle size={18} style={{marginRight: 8, display: 'inline'}} /> End
-            </button>
-          </div>
+          <button 
+            className="btn-primary" 
+            style={{flex: 2}}
+            onClick={endSession}
+            disabled={isEnding}
+          >
+            End Interview
+          </button>
         </div>
 
         {endMessage && (
-          <div style={{ marginTop: '1rem', color: 'var(--accent-cyan)', fontSize: '0.95rem' }}>
+          <div style={{ marginTop: '1rem', color: 'var(--accent)', fontSize: '0.95rem', textAlign: 'center', background: 'var(--accent-glow)', padding: '1rem', borderRadius: '8px' }}>
             {endMessage}
           </div>
         )}
