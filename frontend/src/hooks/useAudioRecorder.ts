@@ -7,6 +7,10 @@ export function useAudioRecorder(onDataAvailable: (blob: Blob) => void) {
 
   const startRecording = useCallback(async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Browser does not support microphone access or you are not in a secure context (HTTPS/localhost).");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
@@ -27,8 +31,9 @@ export function useAudioRecorder(onDataAvailable: (blob: Blob) => void) {
       mediaRecorder.start(500);
       setIsRecording(true);
     } catch (err) {
-      console.error("Microphone access denied or error:", err);
-      alert("Please allow microphone access to conduct the interview.");
+      console.error("Microphone access error:", err);
+      const msg = err instanceof Error ? err.message : "Access denied.";
+      alert(`Microphone Error: ${msg}\n\nPlease ensure you have allowed microphone access and are using a secure connection.`);
     }
   }, [onDataAvailable]);
 

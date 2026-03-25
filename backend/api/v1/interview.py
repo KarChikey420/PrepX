@@ -84,6 +84,7 @@ async def initialize_interview(request: InitializeRequest) -> InitializeResponse
             await user.save()
 
     ws_url = f"/api/v1/interview/stream/{session_id}"
+    rest_url = f"/api/v1/interview/{session_id}"
 
     logger.info(
         "interview.initialized",
@@ -94,6 +95,7 @@ async def initialize_interview(request: InitializeRequest) -> InitializeResponse
     return InitializeResponse(
         session_id=session_id,
         ws_url=ws_url,
+        rest_url=rest_url,
         role=request.role,
         level=request.level,
         target_skills=request.skills,

@@ -32,6 +32,7 @@ class InitializeResponse(BaseModel):
     """Returned after successful session initialization."""
     session_id: str
     ws_url: str = Field(description="WebSocket URL for streaming interview")
+    rest_url: Optional[str] = Field(default=None, description="REST URL for turn-based interview")
     role: str
     level: str
     target_skills: List[str]
@@ -44,6 +45,16 @@ class FinalizeResponse(BaseModel):
     status: str
     message: str
     report_markdown: Optional[str] = None
+
+
+class TurnResponse(BaseModel):
+    """Returned after processing an interview audio turn."""
+    transcription: str
+    evaluation: Optional[Dict[str, Any]] = None
+    mentor_text: Optional[str] = None
+    question_text: str
+    audio_base64: Optional[str] = None
+    is_complete: bool = False
 
 
 class HealthResponse(BaseModel):

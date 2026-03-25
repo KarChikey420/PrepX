@@ -23,6 +23,7 @@ from core.logging import setup_logging
 from core.redis import get_redis
 from api.v1.router import v1_router
 from api.ws.interview import ws_router
+from api.rest.interview import rest_router
 
 # ── Initialize logging before anything else ────────────────────────────
 setup_logging()
@@ -100,6 +101,7 @@ register_exception_handlers(app)
 
 app.include_router(v1_router)
 app.include_router(ws_router)
+app.include_router(rest_router)
 
 
 # ── Health Check ───────────────────────────────────────────────────────

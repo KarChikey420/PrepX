@@ -1,9 +1,16 @@
 import { useRef, useEffect, useCallback } from 'react';
 
-export function useAudioPlayer() {
+export function useAudioPlayer(onPlaybackComplete?: () => void) {
   const queueRef = useRef<Blob[]>([]);
   const isPlayingRef = useRef<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  
+  // Store the latest callback in a ref to prevent stale closures
+  const onCompleteRef = useRef(onPlaybackComplete);
+  
+  useEffect(() => {
+    onCompleteRef.current = onPlaybackComplete;
+  }, [onPlaybackComplete]);
 
   // Initialize context on first user interaction required by browsers
   const initAudio = useCallback(() => {
@@ -31,6 +38,7 @@ export function useAudioPlayer() {
           if (nextBlob) decodeAndPlay(nextBlob);
         } else {
           isPlayingRef.current = false;
+          if (onCompleteRef.current) onCompleteRef.current();
         }
       };
       
@@ -42,6 +50,7 @@ export function useAudioPlayer() {
         if (nextBlob) decodeAndPlay(nextBlob);
       } else {
         isPlayingRef.current = false;
+        if (onCompleteRef.current) onCompleteRef.current();
       }
     }
   };

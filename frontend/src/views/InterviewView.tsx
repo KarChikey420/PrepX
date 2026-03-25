@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { AICore } from '../components/AICore';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useRestInterview } from '../hooks/useRestInterview';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import type { SessionData } from '../types';
@@ -21,12 +21,17 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
     sendAudioData, 
     signalTurnEnd, 
     signalInterviewEnd,
-    setAudioChunkHandler 
-  } = useWebSocket(session.session_id);
+    setAudioChunkHandler,
+    setAiState
+  } = useRestInterview(session.session_id);
   const [isEnding, setIsEnding] = useState(false);
   const [endMessage, setEndMessage] = useState<string | null>(null);
 
-  const { enqueueAudio, initAudio } = useAudioPlayer();
+  const { enqueueAudio, initAudio } = useAudioPlayer(() => {
+    if (aiState === 'speaking') {
+      setAiState('idle');
+    }
+  });
   
   const { isRecording, startRecording, stopRecording } = useAudioRecorder((blob) => {
     // Pipe mic chunks to WebSocket
@@ -55,10 +60,12 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
     initAudio(); // Required to unlock Web Audio API on first interaction
     
     if (isRecording) {
+      setAiState('thinking'); // Show processing while we finalize the audio
       await stopRecording();
       signalTurnEnd(); // Tell backend we finished speaking after the last chunk is flushed
     } else {
       if (aiState === 'listening' || aiState === 'idle') {
+        setAiState('listening'); // Show listening state immediately
         await startRecording();
       }
     }
