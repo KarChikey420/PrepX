@@ -165,13 +165,12 @@ async def interview_stream(ws: WebSocket, session_id: str) -> None:
                         session_id=session_id,
                     )
 
-                elif msg_type == "end_interview":
-                    logger.info("ws.end_interview_requested", session_id=session_id)
-                    await _send_json(ws, "interview_complete", {
-                        "message": "Interview ended by user.",
-                        "session_id": session_id,
-                    })
                     break
+                
+                elif msg_type == "regenerate_question":
+                    logger.info("ws.regenerate_question", session_id=session_id)
+                    await _send_json(ws, "status", {"message": "Thinking of a different question..."})
+                    await _generate_and_send_question(ws, state, session_id)
 
                 else:
                     await _send_error(ws, f"Unknown message type: {msg_type}")
@@ -256,12 +255,16 @@ async def _process_turn(
 
     eval_dict = evaluation.model_dump()
     eval_dict["skill"] = current_skill
-    await _send_json(ws, "evaluation", eval_dict)
 
-    # ── 3. Update Redis state ──────────────────────────────────────
+    # ── Update Redis state (keep score internally) ──────────────────
     state.last_evaluation = eval_dict
     state.current_question_count += 1
     await update_session_state(session_id, state.model_dump())
+
+    # ── Send evaluation to client (hide score) ──────────────────────
+    client_eval = eval_dict.copy()
+    client_eval.pop("score", None)
+    await _send_json(ws, "evaluation", client_eval)
 
     # ── 4. Check skill progression ─────────────────────────────────
     is_last_question = state.current_question_count >= state.questions_per_skill

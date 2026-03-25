@@ -207,12 +207,8 @@ async def process_turn(
         total_latency_ms=round(total_latency, 2),
     )
 
-    state.conversation_history.append({
-        "role": "system",
-        "content": json.dumps(eval_dict),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "type": "evaluation",
-    })
+    client_eval = eval_dict.copy()
+    client_eval.pop("score", None)
 
     # Persist state back to Redis
     await update_session_state(session_id, state.model_dump())
@@ -243,7 +239,7 @@ async def process_turn(
 
     return TurnResponse(
         transcription=transcript,
-        evaluation=eval_dict,
+        evaluation=client_eval,
         mentor_text=mentor_text,
         question_text=question_text,
         audio_base64=audio_base64,
@@ -295,6 +291,71 @@ async def start_interview(session_id: str) -> TurnResponse:
     except Exception as e:
         logger.error("rest.interviewer_error", error=str(e), session_id=session_id)
         question_parts = [f"Tell me about your experience with {current_skill}."]
+
+    question_text = "".join(question_parts)
+    state.last_question = question_text
+
+    state.conversation_history.append({
+        "role": "interviewer",
+        "content": question_text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+    audio_base64 = None
+    try:
+        full_audio = await synthesize_full(question_text)
+        if full_audio:
+            audio_base64 = base64.b64encode(full_audio).decode("utf-8")
+    except Exception as e:
+        logger.error("rest.tts_error", error=str(e), session_id=session_id)
+        
+    await update_session_state(session_id, state.model_dump())
+    
+    return TurnResponse(
+        transcription="",
+        evaluation=None,
+        mentor_text=None,
+        question_text=question_text,
+        audio_base64=audio_base64,
+        is_complete=False,
+    )
+
+@rest_router.post("/{session_id}/regenerate", response_model=TurnResponse)
+async def regenerate_question(session_id: str) -> TurnResponse:
+    """
+    Regenerate the current question (replace it with a different one for the same skill).
+    """
+    logger.info("rest.regenerate_question", session_id=session_id)
+    
+    cached_state = await get_session_state(session_id)
+    if cached_state is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    state = SessionState(**cached_state)
+    
+    if state.status != "active":
+        raise HTTPException(status_code=400, detail="Session is not active")
+
+    # Remove the last interviewer message if we are regenerating
+    if state.conversation_history and state.conversation_history[-1]["role"] == "interviewer":
+        state.conversation_history.pop()
+
+    current_skill = state.target_skills[state.current_skill_index]
+    last_score = state.last_evaluation.get("score") if state.last_evaluation else None
+    
+    question_parts: list[str] = []
+    try:
+        async for chunk in _interviewer.generate_question_stream(
+            skill=current_skill,
+            level=state.level,
+            role=state.role,
+            last_score=last_score,
+            conversation_history=state.conversation_history,
+        ):
+            question_parts.append(chunk)
+    except Exception as e:
+        logger.error("rest.interviewer_error", error=str(e), session_id=session_id)
+        question_parts = [f"Could you tell me more about your experience with {current_skill}?"]
 
     question_text = "".join(question_parts)
     state.last_question = question_text

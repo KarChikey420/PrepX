@@ -8,7 +8,7 @@ interface SetupViewProps {
 
 export function SetupView({ onInitialize }: SetupViewProps) {
   const [role, setRole] = useState('Backend Engineer');
-  const [level, setLevel] = useState('senior');
+  const [level, setLevel] = useState('junior');
   const [skillsInput, setSkillsInput] = useState('python, system design, databases');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,10 +84,8 @@ export function SetupView({ onInitialize }: SetupViewProps) {
             value={level}
             onChange={(e) => setLevel(e.target.value)}
           >
+            <option value="fresher">Fresher (L1/L2)</option>
             <option value="junior">Junior (L3)</option>
-            <option value="mid">Mid-level (L4)</option>
-            <option value="senior">Senior (L5)</option>
-            <option value="lead">Lead (L6)</option>
           </select>
         </div>
 

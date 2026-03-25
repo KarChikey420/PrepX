@@ -1,16 +1,14 @@
 """
 services.voice.stt
 ~~~~~~~~~~~~~~~~~~
-Speech-to-Text using NVIDIA Nematron ASR via the NVIDIA API.
+Speech-to-Text using Deepgram API (via HTTP).
 
 Implements chunked audio buffering — audio chunks are accumulated
-and sent to the STT API when the buffer reaches a configurable threshold,
-allowing processing to begin before the user finishes speaking.
+and sent to the Deepgram API when the buffer reaches a configurable threshold.
 """
 
 from __future__ import annotations
 
-import base64
 import io
 from typing import Optional
 
@@ -69,10 +67,10 @@ class AudioBuffer:
 )
 async def transcribe_audio(audio_bytes: bytes) -> str:
     """
-    Send audio bytes to NVIDIA Nematron ASR for transcription.
+    Send audio bytes to Deepgram for transcription via HTTP.
 
     Args:
-        audio_bytes: Raw audio data (WAV/PCM format).
+        audio_bytes: Raw audio data or WebM.
 
     Returns:
         The transcribed text string.
@@ -84,59 +82,61 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
     if not audio_bytes:
         return ""
 
+    url = f"https://api.deepgram.com/v1/listen?model={settings.deepgram_stt_model}&smart_format=true&language=en"
+    
     headers = {
-        "Authorization": f"Bearer {settings.nematron_asr_stt}",
-        "Accept": "application/json",
-    }
-    
-    files = {
-        "file": ("audio.webm", audio_bytes, "audio/webm"),
-    }
-    
-    data = {
-        "model": settings.nematron_stt_model,
-        "language": "en",
-        "response_format": "json",
+        "Authorization": f"Token {settings.deepgram_api_key}",
+        "Content-Type": "audio/webm", # Most common from our frontend
     }
 
     logger.debug(
         "stt.transcribing",
         audio_size_bytes=len(audio_bytes),
-        model=settings.nematron_stt_model,
+        model=settings.deepgram_stt_model,
     )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{settings.nematron_stt_base_url}/audio/transcriptions",
-            headers=headers,
-            data=data,
-            files=files,
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, content=audio_bytes)
+
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After")
+            raise RateLimitError(
+                service="DeepgramSTT",
+                retry_after=int(retry_after) if retry_after else None,
+            )
+
+        if response.status_code != 200:
+            logger.error(
+                "stt.request_failed",
+                status_code=response.status_code,
+                response_body=response.text[:1000],
+            )
+            raise ExternalAPIError(
+                service="DeepgramSTT",
+                message=f"STT request failed with status {response.status_code}",
+                details={"status_code": response.status_code, "body": response.text[:500]},
+            )
+
+        response_data = response.json()
+        transcript = response_data.get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
+
+        logger.info(
+            "stt.transcribed",
+            transcript_length=len(transcript),
+            audio_size_bytes=len(audio_bytes),
         )
 
-    if response.status_code == 429:
-        retry_after = response.headers.get("Retry-After")
-        raise RateLimitError(
-            service="NematronSTT",
-            retry_after=int(retry_after) if retry_after else None,
-        )
+        return transcript.strip()
 
-    if response.status_code != 200:
+    except Exception as e:
+        if isinstance(e, (RateLimitError, ExternalAPIError)):
+            raise e
+        logger.error("stt.exception", error=str(e))
         raise ExternalAPIError(
-            service="NematronSTT",
-            message=f"STT request failed with status {response.status_code}",
-            details={"status_code": response.status_code, "body": response.text[:500]},
+            service="DeepgramSTT",
+            message=f"STT failure: {e}",
         )
-
-    response_data = response.json()
-    transcript = response_data.get("text", "")
-
-    logger.info(
-        "stt.transcribed",
-        transcript_length=len(transcript),
-        audio_size_bytes=len(audio_bytes),
-    )
-
-    return transcript.strip()
 
 
 async def transcribe_audio_chunks(
@@ -145,10 +145,6 @@ async def transcribe_audio_chunks(
 ) -> str:
     """
     Convenience function: accumulate multiple audio chunks and transcribe.
-
-    This merges all provided chunks then sends them at once.
-    For real-time chunked processing during a WebSocket stream,
-    use AudioBuffer directly.
     """
     buffer = AudioBuffer(threshold_bytes=buffer_threshold)
     for chunk in audio_chunks:

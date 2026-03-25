@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 class InitializeRequest(BaseModel):
     """POST /api/v1/interview/initialize"""
     role: str = Field(..., min_length=1, examples=["Backend Engineer"])
-    level: str = Field(..., pattern=r"^(junior|mid|senior|lead)$", examples=["senior"])
+    level: str = Field(..., pattern=r"^(fresher|junior)$", examples=["junior"])
     skills: List[str] = Field(
         ..., min_length=1, examples=[["python", "system_design", "databases"]]
     )

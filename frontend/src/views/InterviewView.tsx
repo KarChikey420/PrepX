@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { AICore } from '../components/AICore';
 import { useRestInterview } from '../hooks/useRestInterview';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import type { SessionData } from '../types';
-import { Mic, MicOff, CheckCircle } from 'lucide-react';
+import { Mic, MicOff, CheckCircle, RefreshCcw } from 'lucide-react';
 
 interface InterviewViewProps {
   session: SessionData;
@@ -21,24 +21,46 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
     sendAudioData, 
     signalTurnEnd, 
     signalInterviewEnd,
+    regenerateQuestion,
     setAudioChunkHandler,
     setAiState
   } = useRestInterview(session.session_id);
   const [isEnding, setIsEnding] = useState(false);
   const [endMessage, setEndMessage] = useState<string | null>(null);
 
-  const { enqueueAudio, initAudio } = useAudioPlayer(() => {
-    if (aiState === 'speaking') {
-      setAiState('idle');
-    }
-  });
-  
   const { isRecording, startRecording, stopRecording } = useAudioRecorder((blob) => {
     // Pipe mic chunks to WebSocket
     sendAudioData(blob);
   });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const toggleMic = useCallback(async () => {
+    initAudio(); // Required to unlock Web Audio API on first interaction
+    
+    if (isRecording) {
+      setAiState('thinking'); // Show processing while we finalize the audio
+      await stopRecording();
+      signalTurnEnd(); // Tell backend we finished speaking after the last chunk is flushed
+    } else {
+      if (aiState === 'listening' || aiState === 'idle') {
+        setAiState('listening'); // Show listening state immediately
+        await startRecording();
+      }
+    }
+  }, [isRecording, aiState, signalTurnEnd, setAiState, startRecording, stopRecording]);
+
+  const { enqueueAudio, initAudio } = useAudioPlayer(() => {
+    if (aiState === 'speaking') {
+      setAiState('idle');
+      // Automatically open mic after AI finishes speaking
+      setTimeout(() => {
+        // Only start if not already recording and not ending
+        // Use latest state via closures is tricky; we'll assume standard flow
+        toggleMic();
+      }, 500);
+    }
+  });
 
   // Pipe TTS chunks to AudioPlayer
   useEffect(() => {
@@ -55,21 +77,6 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const toggleMic = async () => {
-    initAudio(); // Required to unlock Web Audio API on first interaction
-    
-    if (isRecording) {
-      setAiState('thinking'); // Show processing while we finalize the audio
-      await stopRecording();
-      signalTurnEnd(); // Tell backend we finished speaking after the last chunk is flushed
-    } else {
-      if (aiState === 'listening' || aiState === 'idle') {
-        setAiState('listening'); // Show listening state immediately
-        await startRecording();
-      }
-    }
-  };
 
   const endSession = async () => {
     if (isRecording) {
@@ -121,7 +128,8 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
             <div key={i} className={`message ${msg.role}`}>
               {msg.role === 'interviewer' && <strong>AI: </strong>}
               {msg.role === 'candidate' && <strong>You: </strong>}
-              {msg.content}
+              {msg.role === 'mentor' && <strong style={{color: 'var(--accent-cyan)'}}>Mentor: </strong>}
+              {msg.content.startsWith('{') ? null : msg.content}
             </div>
           ))}
           <div ref={chatEndRef} />
@@ -143,14 +151,26 @@ export function InterviewView({ session, onComplete }: InterviewViewProps) {
               : 'Click Mic to answer.'}
           </div>
 
-          <button 
-            className="btn btn-primary" 
-            style={{padding: '0.75rem 1rem'}}
-            onClick={endSession}
-            disabled={isEnding}
-          >
-            <CheckCircle size={18} /> End Interview
-          </button>
+          <div style={{display: 'flex', gap: '0.5rem'}}>
+            <button 
+              className="btn btn-secondary" 
+              style={{padding: '0.75rem 1rem'}}
+              onClick={regenerateQuestion}
+              disabled={isEnding || aiState !== 'idle'}
+              title="Skip this question and ask another one"
+            >
+              <RefreshCcw size={18} style={{marginRight: 8, display: 'inline'}} /> New Question
+            </button>
+
+            <button 
+              className="btn btn-primary" 
+              style={{padding: '0.75rem 1rem'}}
+              onClick={endSession}
+              disabled={isEnding}
+            >
+              <CheckCircle size={18} style={{marginRight: 8, display: 'inline'}} /> End
+            </button>
+          </div>
         </div>
 
         {endMessage && (

@@ -131,6 +131,42 @@ export function useRestInterview(sessionId: string | null) {
     }
   }, [sessionId]);
 
+  const regenerateQuestion = useCallback(async () => {
+    if (!sessionId) return;
+    setAiState('thinking');
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/interview/${sessionId}/regenerate`, { method: 'POST' });
+      const data = await response.json();
+      
+      setMessages(prev => {
+        // Replace previous question (last interviewer message) if it exists
+        const newMessages = [...prev];
+        if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'interviewer') {
+          newMessages.pop();
+        }
+        newMessages.push({ role: 'interviewer', content: data.question_text });
+        return newMessages;
+      });
+
+      if (data.audio_base64 && onAudioChunkRef.current) {
+        const byteCharacters = atob(data.audio_base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'audio/wav' });
+        onAudioChunkRef.current(blob);
+        setAiState('speaking');
+      } else {
+        setAiState('idle');
+      }
+    } catch (err) {
+      console.error("Regenerate error", err);
+      setAiState('idle');
+    }
+  }, [sessionId]);
+
   const signalInterviewEnd = useCallback(async () => {
     if (!sessionId) return;
     try {
@@ -154,6 +190,7 @@ export function useRestInterview(sessionId: string | null) {
     sendAudioData,
     signalTurnEnd,
     signalInterviewEnd,
+    regenerateQuestion,
     setAudioChunkHandler
   };
 }

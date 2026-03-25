@@ -1,11 +1,10 @@
 """
 services.voice.tts
 ~~~~~~~~~~~~~~~~~~
-Text-to-Speech using NVIDIA Riva TTS via the NVIDIA API (gRPC).
+Text-to-Speech using Deepgram Aura API.
 
-Implements streaming TTS — text is sent to the gRPC API and audio byte
-chunks are yielded back as an async generator for real-time playback
-over WebSockets.
+Implements streaming TTS — text is sent to the Deepgram API and audio byte
+chunks are yielded back as an async generator.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ import asyncio
 import struct
 from typing import AsyncIterator
 
-import riva.client
+import httpx
 import structlog
 
 from core.config import settings
@@ -26,20 +25,16 @@ logger = structlog.get_logger(__name__)
 async def stream_tts(
     text: str,
     voice: str | None = None,
-    sample_rate: int = 22050,
+    sample_rate: int = 16000,
     language_code: str = "en-US",
 ) -> AsyncIterator[bytes]:
     """
-    Stream TTS audio from NVIDIA Riva using the gRPC Python client.
-
-    Sends text to the NVIDIA TTS API and yields audio byte chunks
-    as they arrive natively.
+    Stream TTS audio from Deepgram Aura.
 
     Args:
         text: The text to synthesize into speech.
-        voice: NVIDIA Riva voice identifier.
+        voice: Deepgram Aura voice identifier (e.g., 'aura-athena-en').
         sample_rate: Audio sample rate in Hz.
-        language_code: BCP-47 language code.
 
     Yields:
         Raw audio bytes (chunks) as they stream from the API.
@@ -47,78 +42,57 @@ async def stream_tts(
     if not text.strip():
         return
 
-    voice = voice or settings.nvidia_riva_tts_voice
+    voice = voice or settings.deepgram_tts_model
+    # Requesting raw linear16 PCM to match original implementation's expectations if joined
+    url = f"https://api.deepgram.com/v1/speak?model={voice}&encoding=linear16&sample_rate={sample_rate}"
+    
+    headers = {
+        "Authorization": f"Token {settings.deepgram_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {"text": text}
 
-    # Automatically swap the HTTP base URL out for the gRPC endpoint if using NVIDIA cloud
-    uri = settings.nvidia_riva_tts_base_url.replace("https://", "").replace("http://", "").split("/")[0]
-    if "integrate.api.nvidia.com" in uri or "ai.api.nvidia.com" in uri:
-        # The correct NVCF target for gRPC
-        uri = "grpc.nvcf.nvidia.com:443"
+    logger.debug(
+        "tts.streaming_start",
+        text_length=len(text),
+        voice=voice,
+        sample_rate=sample_rate,
+    )
 
     try:
-        # Use Riva client auth
-        auth = riva.client.Auth(
-            uri=uri,
-            use_ssl=True if "443" in uri else False,
-            metadata_args=[
-                ("authorization", f"Bearer {settings.nvidia_riva_tts}"),
-                ("function-id", settings.nvidia_riva_tts_model),
-            ],
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as response:
+                if response.status_code != 200:
+                    error_text = await response.aread()
+                    logger.error("tts.request_failed", status_code=response.status_code, error=error_text.decode())
+                    raise ExternalAPIError(
+                        service="DeepgramTTS",
+                        message=f"TTS request failed with status {response.status_code}",
+                    )
 
-        tts_service = riva.client.SpeechSynthesisService(auth)
+                total_bytes_yielded = 0
+                async for chunk in response.aiter_bytes():
+                    if chunk:
+                        total_bytes_yielded += len(chunk)
+                        yield chunk
 
-        logger.debug(
-            "tts.streaming_start",
-            text_length=len(text),
-            voice=voice,
-            uri=uri,
-        )
-
-        # Offload the blocking generate call to a thread
-        def generate():
-            return tts_service.synthesize_online(
-                text=text,
-                voice_name=voice,
-                language_code=language_code,
-                sample_rate_hz=sample_rate,
-            )
-
-        responses = await asyncio.to_thread(generate)
-
-        # Iterate the chunks asynchronously so we don't freeze the FastAPI loop
-        def get_next(iterator):
-            try:
-                return next(iterator)
-            except StopIteration:
-                return None
-
-        total_bytes_yielded = 0
-
-        while True:
-            resp = await asyncio.to_thread(get_next, responses)
-            if resp is None:
-                break
-                
-            if resp.audio:
-                total_bytes_yielded += len(resp.audio)
-                yield resp.audio
-
-        logger.info(
-            "tts.streaming_complete",
-            text_length=len(text),
-            total_audio_bytes=total_bytes_yielded,
-        )
+                logger.info(
+                    "tts.streaming_complete",
+                    text_length=len(text),
+                    total_audio_bytes=total_bytes_yielded,
+                )
 
     except Exception as e:
-        logger.error("tts.grpc_error", error=str(e))
+        logger.error("tts.error", error=str(e))
+        if isinstance(e, ExternalAPIError):
+            raise e
         raise ExternalAPIError(
-            service="NvidiaRivaTTS(gRPC)",
-            message=f"TTS gRPC failure: {e}",
+            service="DeepgramTTS",
+            message=f"TTS failure: {e}",
         ) from e
 
 
-def create_wav_header(data_size: int, sample_rate: int = 22050, num_channels: int = 1, bits_per_sample: int = 16) -> bytes:
+def create_wav_header(data_size: int, sample_rate: int = 16000, num_channels: int = 1, bits_per_sample: int = 16) -> bytes:
     """Create a standard WAV header for raw PCM data."""
     byte_rate = sample_rate * num_channels * (bits_per_sample // 8)
     block_align = num_channels * (bits_per_sample // 8)
@@ -145,7 +119,7 @@ def create_wav_header(data_size: int, sample_rate: int = 22050, num_channels: in
 async def synthesize_full(
     text: str,
     voice: str | None = None,
-    sample_rate: int = 22050,
+    sample_rate: int = 16000,
 ) -> bytes:
     """
     Non-streaming TTS: synthesize full audio and return all bytes at once.
@@ -158,5 +132,6 @@ async def synthesize_full(
     if not pcm_data:
         return b""
         
+    # Re-adding WAV header because we requested linear16 PCM from Deepgram
     wav_header = create_wav_header(len(pcm_data), sample_rate=sample_rate)
     return wav_header + pcm_data

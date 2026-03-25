@@ -40,30 +40,15 @@ class Settings(BaseSettings):
         description="MongoDB database name",
     )
 
-    # ── Voice: STT (NVIDIA Nematron) ───────────────────────────────────
-    nematron_asr_stt: str = Field(..., alias="nematron_ASR_STT", description="API key for NVIDIA Nematron STT")
-    nematron_stt_base_url: str = Field(
-        default="https://integrate.api.nvidia.com/v1",
-        description="Base URL for Nematron STT API",
+    # ── Voice: Deepgram (STT & TTS) ────────────────────────────────────
+    deepgram_api_key: str = Field(..., description="Deepgram API key")
+    deepgram_stt_model: str = Field(
+        default="nova-2",
+        description="Deepgram STT model identifier",
     )
-    nematron_stt_model: str = Field(
-        default="openai/whisper-large-v3",
-        description="Nematron STT model identifier",
-    )
-
-    # ── Voice: TTS (NVIDIA Riva) ───────────────────────────────────────
-    nvidia_riva_tts: str = Field(..., alias="nvidia_riva_TTs", description="API key for NVIDIA Riva TTS")
-    nvidia_riva_tts_base_url: str = Field(
-        default="https://integrate.api.nvidia.com/v1",
-        description="Base URL for NVIDIA Riva TTS API",
-    )
-    nvidia_riva_tts_model: str = Field(
-        default="877104f7-e885-42b9-8de8-f6e4c6303969",
-        description="NVIDIA Riva TTS model identifier",
-    )
-    nvidia_riva_tts_voice: str = Field(
-        default="Magpie-Multilingual.EN-US.Aria",
-        description="NVIDIA Riva TTS voice identifier",
+    deepgram_tts_model: str = Field(
+        default="aura-athena-en",
+        description="Deepgram TTS model identifier",
     )
 
     # ── Cache (Upstash Redis REST) ─────────────────────────────────────
