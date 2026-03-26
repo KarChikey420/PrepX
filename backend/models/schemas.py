@@ -1,7 +1,10 @@
 """
 models.schemas
 ~~~~~~~~~~~~~~
-Pydantic V2 request / response schemas for the API layer.
+Pydantic V2 request / response schemas for the unified AI interview API.
+
+Single flow:
+  upload → start → turn (×9) → finish → report
 """
 
 from __future__ import annotations
@@ -11,138 +14,13 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-# ── Request Schemas ────────────────────────────────────────────────────
-
-
-class InitializeRequest(BaseModel):
-    """POST /api/v1/interview/initialize"""
-    role: str = Field(..., min_length=1, examples=["Backend Engineer"])
-    level: str = Field(..., pattern=r"^(fresher|junior)$", examples=["junior"])
-    skills: List[str] = Field(
-        ..., min_length=1, examples=[["python", "system_design", "databases"]]
-    )
-    user_email: Optional[str] = Field(default=None, examples=["dev@example.com"])
-    questions_per_skill: int = Field(default=3, ge=1, le=10)
-
-
-# ── Response Schemas ───────────────────────────────────────────────────
-
-
-class InitializeResponse(BaseModel):
-    """Returned after successful session initialization."""
-    session_id: str
-    ws_url: str = Field(description="WebSocket URL for streaming interview")
-    rest_url: Optional[str] = Field(default=None, description="REST URL for turn-based interview")
-    role: str
-    level: str
-    target_skills: List[str]
-    message: str = Field(default="Session initialized. Connect to ws_url to begin.")
-
-
-class FinalizeResponse(BaseModel):
-    """Returned after triggering session finalization."""
-    session_id: str
-    status: str
-    message: str
-    report_markdown: Optional[str] = None
-
-
-class TurnResponse(BaseModel):
-    """Returned after processing an interview audio turn."""
-    transcription: str
-    evaluation: Optional[Dict[str, Any]] = None
-    mentor_text: Optional[str] = None
-    question_text: str
-    audio_base64: Optional[str] = None
-    is_complete: bool = False
-
-
-class HealthResponse(BaseModel):
-    """GET /health"""
-    status: str = "ok"
-    version: str
-    mongodb: str = "connected"
-    redis: str = "connected"
-
-
-# ── AI Evaluation Schema ──────────────────────────────────────────────
-
-
-class EvaluationResult(BaseModel):
-    """
-    Strict schema for the EvaluatorAgent's tool-call output.
-    Enforced via function/tool calling on Kimi K2.
-    """
-    score: int = Field(..., ge=1, le=10, description="Quality score 1-10")
-    feedback: str = Field(..., min_length=1, description="Detailed evaluation feedback")
-    strengths: List[str] = Field(default_factory=list, description="Key strengths identified")
-    weaknesses: List[str] = Field(default_factory=list, description="Areas for improvement")
-
-
-# ── Session State (Redis Cache) ───────────────────────────────────────
-
-
-class SessionState(BaseModel):
-    """
-    Lightweight, serializable representation of session state for Redis.
-    This is the hot-path data used during WebSocket streaming.
-    """
-    session_id: str
-    role: str
-    level: str
-    target_skills: List[str]
-    current_skill_index: int = 0
-    current_question_count: int = 0
-    questions_per_skill: int = 3
-    last_evaluation: Optional[Dict[str, Any]] = None
-    last_question: Optional[str] = None
-    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
-    status: str = "active"
-
-
-# ── WebSocket Messages ────────────────────────────────────────────────
-
-
-class WSMessage(BaseModel):
-    """Generic WebSocket JSON message envelope."""
-    type: str = Field(..., description="Message type identifier")
-    data: Dict[str, Any] = Field(default_factory=dict)
-
-
-class WSTranscription(BaseModel):
-    """Server → Client: transcription result."""
-    type: str = "transcription"
-    text: str
-    is_final: bool = True
-
-
-class WSEvaluation(BaseModel):
-    """Server → Client: evaluation result."""
-    type: str = "evaluation"
-    evaluation: Dict[str, Any]
-
-
-class WSAudioChunk(BaseModel):
-    """Server → Client: audio chunk metadata (actual bytes sent as binary frame)."""
-    type: str = "audio_chunk"
-    sequence: int
-    is_last: bool = False
-
-
-class WSError(BaseModel):
-    """Server → Client: error notification."""
-    type: str = "error"
-    message: str
-    recoverable: bool = True
-
-
-# ── Smart Interview (Resume-Based) Schemas ────────────────────────────
+# ── Candidate Profile ─────────────────────────────────────────────────
 
 
 class CandidateProfile(BaseModel):
-    """Extracted and analyzed data from a candidate's resume."""
+    """Extracted and analyzed data from a candidate's resume and JD."""
     candidate_name: str
-    experience_level: str
+    experience_level: str                    # fresher | junior | mid | senior | lead
     years_of_experience: int
     technical_skills: List[str]
     soft_skills: List[str]
@@ -155,46 +33,135 @@ class CandidateProfile(BaseModel):
     interview_focus_areas: List[str]
 
 
-class ResumeUploadResponse(BaseModel):
-    """Returned after successful resume parsing and analysis."""
+# ── Upload ─────────────────────────────────────────────────────────────
+
+
+class UploadResponse(BaseModel):
+    """Returned after successful resume + JD upload and profile analysis."""
     session_id: str
     profile: CandidateProfile
+    message: str = "Profile analyzed. Call /start to begin the interview."
 
 
-class SmartQuestion(BaseModel):
-    """A logically generated interview question based on the candidate's profile."""
-    id: int
-    type: str
-    difficulty: str
+# ── Question ───────────────────────────────────────────────────────────
+
+
+class UnifiedQuestion(BaseModel):
+    """
+    A single interview question generated from the candidate profile.
+    Stored in Redis; difficulty may be re-framed adaptively during the interview.
+    """
+    id: int                                  # 1-10
+    type: str                                # technical | behavioral | situational
+    difficulty: str                          # easy | medium | hard
     question: str
     focus_area: str
     expected_keywords: List[str]
 
 
-class SmartQuestionSet(BaseModel):
-    """Set of questions generated for a smart interview session."""
+# ── Session State (Redis) ──────────────────────────────────────────────
+
+
+class UnifiedSessionState(BaseModel):
+    """
+    Full session state stored in Redis.
+    The single source of truth for the hot-path interview loop.
+    """
     session_id: str
-    questions: List[SmartQuestion]
+    role: str
+    level: str
+    profile: Dict[str, Any]                          # serialized CandidateProfile
+    questions: List[Dict[str, Any]] = Field(default_factory=list)  # List[UnifiedQuestion]
+    current_question_index: int = 0
+    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
+    evaluations: List[Dict[str, Any]] = Field(default_factory=list)
+    last_score: Optional[int] = None
+    last_question: Optional[str] = None
+    status: str = "active"                   # active | completed
 
 
-class AnswerSubmission(BaseModel):
-    """Request schema for submitting a text answer to a smart question."""
+# ── Start ──────────────────────────────────────────────────────────────
+
+
+class StartResponse(BaseModel):
+    """Returned after /start generates 10 questions and delivers Q1."""
     session_id: str
-    question_id: int
-    answer: str
+    question_text: str
+    audio_base64: Optional[str] = None      # WAV audio of the first question
+    question_number: int = 1
+    total_questions: int = 10
+    focus_area: str = ""
+    question_type: str = ""
 
 
-class AnswerFeedback(BaseModel):
-    """Evaluation feedback for a single smart question answer."""
-    score: int
-    feedback: str
-    follow_up_question: Optional[str] = None
+# ── Turn ───────────────────────────────────────────────────────────────
 
 
-class SmartReport(BaseModel):
-    """Final performance report for a resume-based smart interview."""
-    overall_score: float
-    strengths: List[str]
+class UnifiedTurnResponse(BaseModel):
+    """Returned after each audio turn (questions 2-10)."""
+    transcription: str
+    mentor_hint: Optional[str] = None       # Empathetic 1-2 sentence encouragement
+    feedback: Optional[str] = None          # Actionable feedback (no score)
+    question_text: str = ""
+    audio_base64: Optional[str] = None
+    question_number: int
+    total_questions: int = 10
+    focus_area: str = ""
+    question_type: str = ""
+    is_complete: bool = False
+
+
+# ── Final Report ────────────────────────────────────────────────────────
+
+
+class FinalReport(BaseModel):
+    """
+    Structured final performance report generated after all 10 questions.
+    Verdict is one of: Hire | Borderline | Needs Improvement
+    """
+    overall_summary: str
+    strong_areas: List[str]
     weak_areas: List[str]
-    readiness_verdict: str
+    skill_gap: List[str]
+    communication_assessment: str
+    verdict: str                             # Hire | Borderline | Needs Improvement
     recommendations: List[str]
+    overall_score: float                     # Shown in report summary
+    session_id: str
+
+
+# ── Report Poll ────────────────────────────────────────────────────────
+
+
+class ReportPollResponse(BaseModel):
+    """Response for GET /{session_id}/report."""
+    session_id: str
+    status: str                              # ready | generating | not_started
+    report_markdown: Optional[str] = None
+    report: Optional[FinalReport] = None
+
+
+# ── Evaluation (Internal) ──────────────────────────────────────────────
+
+
+class EvaluationResult(BaseModel):
+    """
+    Strict schema for the EvaluatorAgent's tool-call output.
+    Enforced via function/tool calling on Kimi K2.
+    Score is NEVER exposed to the client directly.
+    """
+    score: int = Field(..., ge=1, le=10, description="Quality score 1-10 (internal only)")
+    feedback: str = Field(..., min_length=1, description="Constructive feedback")
+    strengths: List[str] = Field(default_factory=list)
+    weaknesses: List[str] = Field(default_factory=list)
+
+
+# ── Health ─────────────────────────────────────────────────────────────
+
+
+class HealthResponse(BaseModel):
+    """GET /health"""
+    status: str = "ok"
+    version: str
+    mongodb: str = "connected"
+    redis: str = "connected"

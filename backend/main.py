@@ -1,10 +1,14 @@
 """
 main.py
 ~~~~~~~
-FastAPI application entry point.
+FastAPI application entry point — Unified Interview System.
 
-Initializes the application with lifecycle management (startup/shutdown),
-mounts all routers, registers exception handlers, and configures CORS.
+Lifecycle:
+  Startup:  MongoDB init → Redis warm-up
+  Shutdown: MongoDB close
+
+Routers:
+  v1_router → /api/v1/interview/* (unified flow)
 """
 
 from __future__ import annotations
@@ -22,8 +26,6 @@ from core.exceptions import register_exception_handlers
 from core.logging import setup_logging
 from core.redis import get_redis
 from api.v1.router import v1_router
-from api.ws.interview import ws_router
-from api.rest.interview import rest_router
 
 # ── Initialize logging before anything else ────────────────────────────
 setup_logging()
@@ -36,44 +38,29 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
-    Manage application startup and shutdown lifecycle.
-
-    Startup:
-      1. Initialize MongoDB + Beanie
-      2. Warm up Redis connection
-      3. Log readiness
-
-    Shutdown:
-      1. Close MongoDB connection
-      2. Log shutdown
+    Startup:  Init MongoDB + Beanie, warm up Redis.
+    Shutdown: Close MongoDB connection.
     """
-    logger.info(
-        "app.starting",
-        app_name=settings.app_name,
-        version=settings.app_version,
-    )
-
-    # ── Startup ────────────────────────────────────────────────────
+    logger.info("app.starting", app_name=settings.app_name, version=settings.app_version)
     await init_db()
-    get_redis()  # Warm up the Redis singleton
+    get_redis()  # Warm up singleton
     logger.info("app.ready", app_name=settings.app_name)
 
     yield
 
-    # ── Shutdown ───────────────────────────────────────────────────
     await close_db()
     logger.info("app.shutdown_complete")
 
 
-# ── Create FastAPI App ─────────────────────────────────────────────────
+# ── App Instance ───────────────────────────────────────────────────────
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "Enterprise AI Voice Interviewer — A production-grade, asynchronous "
-        "backend for conducting real-time AI-powered technical interviews "
-        "with voice streaming."
+        "PrepX — AI-powered interview assistant. "
+        "Upload your resume and job description to start a personalized, "
+        "voice-enabled mock interview with adaptive difficulty and a final performance report."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
@@ -81,7 +68,7 @@ app = FastAPI(
 )
 
 
-# ── CORS Middleware ────────────────────────────────────────────────────
+# ── CORS ───────────────────────────────────────────────────────────────
 
 app.add_middleware(
     CORSMiddleware,
@@ -92,27 +79,22 @@ app.add_middleware(
 )
 
 
-# ── Register Exception Handlers ───────────────────────────────────────
+# ── Exception Handlers ─────────────────────────────────────────────────
 
 register_exception_handlers(app)
 
 
-# ── Mount Routers ──────────────────────────────────────────────────────
+# ── Routers ────────────────────────────────────────────────────────────
 
 app.include_router(v1_router)
-app.include_router(ws_router)
-app.include_router(rest_router)
 
 
-# ── Health Check ───────────────────────────────────────────────────────
+# ── System Endpoints ───────────────────────────────────────────────────
 
-@app.get("/health", tags=["System"])
+
+@app.get("/health", tags=["System"], summary="Health check")
 async def health_check() -> dict:
-    """
-    Health check endpoint for load balancers and Docker HEALTHCHECK.
-    """
-    import asyncio
-    # Quick Redis check
+    """Liveness + readiness probe. Pings MongoDB and Redis."""
     redis_status = "connected"
     try:
         client = get_redis()
@@ -120,7 +102,6 @@ async def health_check() -> dict:
     except Exception:
         redis_status = "disconnected"
 
-    # Quick MongoDB check
     mongo_status = "connected"
     try:
         from core.database import get_client
@@ -138,18 +119,20 @@ async def health_check() -> dict:
     }
 
 
-@app.get("/", tags=["System"])
+@app.get("/", tags=["System"], summary="API info")
 async def root() -> dict:
-    """Root endpoint with API information."""
+    """Root endpoint — API info and endpoint map."""
     return {
         "app": settings.app_name,
         "version": settings.app_version,
         "docs": "/docs",
         "health": "/health",
+        "flow": "upload → start → turn (×9) → finish → report",
         "endpoints": {
-            "initialize": "POST /api/v1/interview/initialize",
-            "stream": "WS /api/v1/interview/stream/{session_id}",
-            "finalize": "POST /api/v1/interview/{session_id}/finalize",
-            "report": "GET /api/v1/interview/{session_id}/report",
+            "upload":  "POST /api/v1/interview/upload",
+            "start":   "POST /api/v1/interview/{session_id}/start",
+            "turn":    "POST /api/v1/interview/{session_id}/turn",
+            "finish":  "POST /api/v1/interview/{session_id}/finish",
+            "report":  "GET  /api/v1/interview/{session_id}/report",
         },
     }
