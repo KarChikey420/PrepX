@@ -11,7 +11,7 @@ export const Profile: React.FC = () => {
   const navigate = useNavigate();
 
   if (!profile) {
-    navigate('/');
+    navigate('/upload');
     return null;
   }
 

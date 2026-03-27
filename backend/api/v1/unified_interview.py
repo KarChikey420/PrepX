@@ -439,7 +439,9 @@ async def finish_interview(session_id: str) -> FinalReport:
         session = await InterviewSession.get(PydanticObjectId(session_id))
         if session:
             session.status = SessionStatus.COMPLETED
+            session.evaluation_history = state.evaluations
             session.report_markdown = report_md
+            session.report_data = report.model_dump()
             session.updated_at = datetime.now(timezone.utc)
             await session.save()
     except Exception as e:
@@ -480,6 +482,7 @@ async def get_report(session_id: str) -> ReportPollResponse:
             session_id=session_id,
             status="ready",
             report_markdown=session.report_markdown,
+            report=FinalReport(**session.report_data) if session.report_data else None,
         )
 
     return ReportPollResponse(

@@ -19,7 +19,7 @@ export const Interview: React.FC = () => {
   // Initialize Interview
   useEffect(() => {
     if (!sessionId) {
-      navigate('/');
+      navigate('/upload');
       return;
     }
 

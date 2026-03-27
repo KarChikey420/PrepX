@@ -1,18 +1,29 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Mic, User, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Mic, User, LogOut, Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../utils/cn';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useInterviewStore } from '../../store/useInterviewStore';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: LayoutDashboard, label: 'Upload', path: '/upload' },
   { icon: Mic, label: 'Interviews', path: '/interview' },
   { icon: User, label: 'Profile', path: '/profile' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
+  { icon: Trophy, label: 'Results', path: '/report' },
 ];
 
 export const SharedLayout: React.FC = () => {
   const location = useLocation();
+  const logout = useAuthStore((state) => state.logout);
+  const sessionId = useInterviewStore((state) => state.sessionId);
+  const report = useInterviewStore((state) => state.report);
+  const visibleNavItems = navItems.filter((item) => item.path !== '/report' || sessionId || report);
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
 
   return (
     <div className="flex h-screen bg-[#0a192f] text-gray-100 overflow-hidden font-sans">
@@ -26,7 +37,7 @@ export const SharedLayout: React.FC = () => {
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
             
@@ -55,7 +66,10 @@ export const SharedLayout: React.FC = () => {
         </nav>
 
         <div className="p-6 mt-auto border-t border-white/5">
-          <button className="flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-red-400 transition-colors w-full group">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-red-400 transition-colors w-full group"
+          >
             <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             <span className="font-medium">Logout</span>
           </button>
@@ -67,7 +81,7 @@ export const SharedLayout: React.FC = () => {
         {/* Top Header */}
         <header className="sticky top-0 z-20 h-20 px-8 flex items-center justify-between border-b border-white/5 bg-[#0a192f]/50 backdrop-blur-md">
           <h1 className="text-xl font-bold tracking-tight text-white/90">
-            {navItems.find(item => item.path === location.pathname)?.label || 'Dashboard'}
+            {visibleNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
           </h1>
           <div className="flex items-center gap-4">
             <div className="p-2 rounded-full hover:bg-white/5 text-gray-400 relative">

@@ -33,6 +33,8 @@ class User(Document):
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     display_name: Optional[str] = None
+    google_id: Optional[str] = Field(None, description="Google OAuth subject ID")
+    refresh_token: Optional[str] = Field(None, description="Hashed refresh token for session")
 
     class Settings:
         name = "users"

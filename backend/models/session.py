@@ -71,6 +71,10 @@ class InterviewSession(Document):
     report_markdown: Optional[str] = Field(
         default=None, description="Generated Markdown performance report"
     )
+    report_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Structured final report payload for client-side results rendering",
+    )
     
     # -- Resume / Smart Interview fields --
     candidate_name: Optional[str] = None

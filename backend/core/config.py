@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -66,8 +66,36 @@ class Settings(BaseSettings):
         ],
         description="Allowed CORS origins",
     )
-    app_name: str = Field(default="AI Voice Interviewer", description="Application display name")
+    app_name: str = Field(default="PrepX AI Interviewer", description="Application display name")
     app_version: str = Field(default="1.0.0", description="Application version")
+
+    # ── Authentication (JWT) ──────────────────────────────────────────
+    jwt_secret_key: str = Field(..., description="JWT signing secret key")
+    jwt_algorithm: str = Field(default="HS256", description="JWT hashing algorithm")
+    access_token_expire_minutes: int = Field(default=30, description="Access token expiry (minutes)")
+    refresh_token_expire_days: int = Field(default=7, description="Refresh token expiry (days)")
+
+    # ── Google OAuth ──────────────────────────────────────────────────
+    frontend_base_url: str = Field(
+        default="http://localhost:5173",
+        validation_alias=AliasChoices("FRONTEND_BASE_URL", "frontend_base_url"),
+        description="Frontend base URL used for auth success/error redirects",
+    )
+    google_oauth_redirect_uri: str = Field(
+        default="http://localhost:8000/api/v1/auth/callback",
+        validation_alias=AliasChoices("GOOGLE_OAUTH_REDIRECT_URI", "google_oauth_redirect_uri"),
+        description="Exact Google OAuth redirect URI registered in Google Cloud Console",
+    )
+    google_client_id: str = Field(
+        ...,
+        validation_alias=AliasChoices("GOOGLE_CLIENT_ID", "google_client_id", "client-id"),
+        description="Google OAuth Client ID",
+    )
+    google_client_secret: str = Field(
+        ...,
+        validation_alias=AliasChoices("GOOGLE_CLIENT_SECRET", "google_client_secret", "client-secret"),
+        description="Google OAuth Client Secret",
+    )
 
 
 # Singleton settings instance — imported across the app.

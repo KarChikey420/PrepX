@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Trophy, 
-  Target, 
-  Zap, 
-  AlertTriangle, 
-  MessageSquare, 
-  Download,
-  Share2,
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
   CheckCircle2,
-  XCircle,
-  AlertCircle
+  FileText,
+  Mic,
+  Printer,
+  RotateCcw,
+  Sparkles,
+  Target,
+  Trophy,
+  Upload,
+  User,
 } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { NeonButton } from '../components/ui/NeonButton';
@@ -19,216 +22,377 @@ import { CircularScore } from '../components/ui/CircularScore';
 import { useInterviewStore } from '../store/useInterviewStore';
 import { interviewService } from '../services/interviewService';
 
+const FLOW_STEPS = [
+  { label: 'Resume + JD', icon: Upload, note: 'Profile input uploaded' },
+  { label: 'Profile', icon: User, note: 'Candidate insights generated' },
+  { label: 'Interview', icon: Mic, note: '10 adaptive questions completed' },
+  { label: 'Report', icon: Trophy, note: 'Final result is ready' },
+];
+
+const TOTAL_QUESTIONS = 10;
+
+const verdictStyles = {
+  Hire: {
+    chip: 'bg-green-400/10 border-green-400/20 text-green-300',
+    accent: 'text-green-300',
+    panel: 'from-green-400/8 to-transparent',
+  },
+  Borderline: {
+    chip: 'bg-amber-400/10 border-amber-400/20 text-amber-300',
+    accent: 'text-amber-300',
+    panel: 'from-amber-400/8 to-transparent',
+  },
+  'Needs Improvement': {
+    chip: 'bg-red-400/10 border-red-400/20 text-red-300',
+    accent: 'text-red-300',
+    panel: 'from-red-400/8 to-transparent',
+  },
+} as const;
+
+const ProgressMetric: React.FC<{
+  label: string;
+  value: string;
+  percentage: number;
+  toneClass?: string;
+}> = ({ label, value, percentage, toneClass = 'bg-neon-cyan' }) => (
+  <div className="space-y-3">
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-xs font-bold uppercase tracking-[0.24em] text-gray-500">{label}</span>
+      <span className="text-sm font-black text-white">{value}</span>
+    </div>
+    <div className="h-2 overflow-hidden rounded-full bg-slate-800/80">
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${Math.max(0, Math.min(percentage, 100))}%` }}
+        transition={{ duration: 1.1, ease: 'easeOut' }}
+        className={`h-full rounded-full ${toneClass}`}
+      />
+    </div>
+  </div>
+);
+
 export const Report: React.FC = () => {
-  const { report, sessionId, setReport, reset } = useInterviewStore();
-  const [isLoading, setIsLoading] = useState(!report);
   const navigate = useNavigate();
+  const { sessionId, profile, report, setReport, reset } = useInterviewStore();
+  const [isLoading, setIsLoading] = useState(!report);
+  const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
-      navigate('/');
+      navigate('/upload');
       return;
     }
 
-    const fetchReport = async () => {
-      if (report) return;
+    if (report) {
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadReport = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+
       try {
-        const data = await interviewService.finish(sessionId);
-        setReport(data);
-      } catch (err) {
-        console.error('Failed to fetch report:', err);
+        const data = await interviewService.getReport(sessionId);
+        if (!isMounted) {
+          return;
+        }
+
+        setReportMarkdown(data.report_markdown);
+
+        if (data.report) {
+          setReport(data.report);
+        } else if (data.status !== 'ready') {
+          setLoadError('Complete the interview to unlock your final result and score.');
+        } else {
+          setLoadError('The report text was saved, but the structured result payload is missing for this session.');
+        }
+      } catch (error) {
+        console.error('Failed to load report:', error);
+        if (isMounted) {
+          setLoadError('We could not load the saved result right now. Please try again from the interview page.');
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchReport();
+    loadReport();
+
+    return () => {
+      isMounted = false;
+    };
   }, [sessionId, report, setReport, navigate]);
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center">
         <motion.div
-           animate={{ rotate: 360 }}
-           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-           className="w-16 h-16 border-4 border-neon-cyan/20 border-t-neon-cyan rounded-full mb-6"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="mb-6 h-16 w-16 rounded-full border-4 border-neon-cyan/20 border-t-neon-cyan shadow-neon-glow"
         />
-        <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Generating Final Report...</p>
+        <p className="text-sm font-bold uppercase tracking-[0.32em] text-gray-400">Generating Final Result</p>
       </div>
     );
   }
 
-  if (!report) return null;
+  if (!report) {
+    return (
+      <div className="mx-auto max-w-4xl py-10">
+        <GlassCard className="overflow-hidden border-amber-300/10 bg-gradient-to-br from-amber-300/5 to-transparent p-10">
+          <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-300/10 text-amber-300">
+            <AlertCircle size={26} />
+          </div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Result Pending</p>
+          <h2 className="mb-4 text-3xl font-black text-white">Your report is not ready yet</h2>
+          <p className="mb-8 max-w-2xl text-base leading-relaxed text-gray-300">
+            {loadError || 'Finish the interview first, then PrepX will generate your final score and performance summary.'}
+          </p>
 
-  const verdictStyles = {
-    'Hire': { color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20', icon: CheckCircle2 },
-    'Borderline': { color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', icon: AlertCircle },
-    'Needs Improvement': { color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/20', icon: XCircle },
-  };
+          {reportMarkdown && (
+            <GlassCard className="mb-8 border-white/5 bg-slate-950/40 p-5">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-gray-500">Saved Report Snapshot</p>
+              <pre className="whitespace-pre-wrap font-mono text-xs leading-6 text-gray-300">{reportMarkdown}</pre>
+            </GlassCard>
+          )}
 
-  const currentVerdict = verdictStyles[report.verdict as keyof typeof verdictStyles] || verdictStyles['Borderline'];
-  const VerdictIcon = currentVerdict.icon;
+          <div className="flex flex-wrap gap-4">
+            <NeonButton onClick={() => navigate('/interview')}>
+              Return To Interview
+            </NeonButton>
+            <NeonButton variant="outline" onClick={() => navigate('/profile')}>
+              Review Profile
+            </NeonButton>
+          </div>
+        </GlassCard>
+      </div>
+    );
+  }
+
+  const verdictStyle = verdictStyles[report.verdict as keyof typeof verdictStyles] || verdictStyles.Borderline;
+  const skillMatch = profile
+    ? Math.round((profile.matched_skills.length / Math.max(profile.key_jd_requirements.length, 1)) * 100)
+    : Math.round(report.overall_score * 10);
+  const focusAreaCount = profile?.interview_focus_areas.length || report.strong_areas.length || report.weak_areas.length || 1;
 
   return (
-    <div className="max-w-6xl mx-auto py-6">
-      <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
-        <motion.div
-           initial={{ opacity: 0, x: -20 }}
-           animate={{ opacity: 1, x: 0 }}
-        >
-          <span className="text-neon-cyan font-bold tracking-widest text-xs uppercase block mb-1">PERFORMANCE ANALYTICS</span>
-          <h2 className="text-4xl font-black text-glow">Interview Report</h2>
-        </motion.div>
-        
-        <div className="flex gap-4">
-           <NeonButton variant="outline" size="sm" className="px-5">
-              <Download size={18} /> Export PDF
-           </NeonButton>
-           <NeonButton variant="outline" size="sm" className="px-5">
-              <Share2 size={18} /> Share Results
-           </NeonButton>
+    <div className="mx-auto max-w-7xl py-6">
+      <div className="mb-10 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Result Section</p>
+          <h2 className="text-4xl font-black tracking-tight text-white">Interview Progress And Score</h2>
+          <p className="mt-3 max-w-3xl text-base leading-relaxed text-gray-400">
+            Review the full journey from upload to final report, then use the score and recommendations to plan your next interview round.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <NeonButton variant="outline" onClick={() => window.print()}>
+            <Printer size={18} />
+            Save As PDF
+          </NeonButton>
+          <NeonButton variant="outline" onClick={() => navigate('/profile')}>
+            <ArrowRight size={18} />
+            View Profile
+          </NeonButton>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
-        {/* Main Score & Verdict */}
-        <GlassCard className="lg:col-span-8 p-10 flex flex-col md:flex-row items-center gap-12 bg-gradient-to-br from-slate-900/60 to-transparent">
-          <CircularScore score={report.overall_score} size={240} />
-          
-          <div className="flex-1 space-y-6">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border ${currentVerdict.bg} ${currentVerdict.border} ${currentVerdict.color}`}
-            >
-              <VerdictIcon size={20} />
-              <span className="text-sm font-black uppercase tracking-widest italic">AI VERDICT: {report.verdict}</span>
-            </motion.div>
-            
-            <div className="space-y-4">
-               <h3 className="text-2xl font-bold flex items-center gap-3">
-                 <Trophy className="text-neon-cyan" /> Executive Summary
-               </h3>
-               <p className="text-gray-400 leading-relaxed italic">
-                 "{report.overall_summary}"
-               </p>
+      <div className="mb-8 grid grid-cols-1 gap-8 xl:grid-cols-12">
+        <GlassCard className={`xl:col-span-8 overflow-hidden bg-gradient-to-br ${verdictStyle.panel} p-8 md:p-10`}>
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
+            <div className="flex justify-center">
+              <CircularScore score={report.overall_score} size={220} label="Overall Score" />
+            </div>
+
+            <div>
+              <div className={`mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black uppercase tracking-[0.24em] ${verdictStyle.chip}`}>
+                <Sparkles size={16} />
+                {report.verdict}
+              </div>
+
+              <h3 className="mb-3 text-3xl font-black text-white">
+                {profile?.candidate_name || 'Candidate Result'}
+              </h3>
+              <p className="mb-2 text-sm uppercase tracking-[0.24em] text-gray-500">
+                {profile?.job_title_applying_for || 'Interview Role'}
+              </p>
+              <p className="max-w-2xl text-base leading-relaxed text-gray-300">
+                {report.overall_summary}
+              </p>
+
+              <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-gray-500">Questions</p>
+                  <p className="mt-2 text-2xl font-black text-white">{TOTAL_QUESTIONS}/10</p>
+                  <p className="mt-1 text-sm text-gray-400">Adaptive rounds completed</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-gray-500">Focus Areas</p>
+                  <p className="mt-2 text-2xl font-black text-white">{focusAreaCount}</p>
+                  <p className="mt-1 text-sm text-gray-400">Profile-led topics reviewed</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-gray-500">JD Match</p>
+                  <p className="mt-2 text-2xl font-black text-white">{skillMatch}%</p>
+                  <p className="mt-1 text-sm text-gray-400">Matched skills against requirements</p>
+                </div>
+              </div>
             </div>
           </div>
         </GlassCard>
 
-        {/* Breakdown Summary */}
-        <GlassCard className="lg:col-span-4 p-8 flex flex-col justify-center gap-8">
-           <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold text-gray-500 uppercase">
-                 <span>Technical</span>
-                 <span className="text-neon-cyan">8.5 / 10</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                 <motion.div
-                   initial={{ width: 0 }}
-                   animate={{ width: '85%' }}
-                   className="h-full bg-neon-cyan"
-                 />
-              </div>
-           </div>
-           
-           <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold text-gray-500 uppercase">
-                 <span>Behavioral</span>
-                 <span className="text-blue-400">7.2 / 10</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                 <motion.div
-                   initial={{ width: 0 }}
-                   animate={{ width: '72%' }}
-                   className="h-full bg-blue-400"
-                 />
-              </div>
-           </div>
-           
-           <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold text-gray-500 uppercase">
-                 <span>Communication</span>
-                 <span className="text-yellow-500">9.0 / 10</span>
-              </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                 <motion.div
-                   initial={{ width: 0 }}
-                   animate={{ width: '90%' }}
-                   className="h-full bg-yellow-500"
-                 />
-              </div>
-           </div>
+        <GlassCard className="xl:col-span-4 p-8">
+          <p className="mb-6 text-xs font-bold uppercase tracking-[0.28em] text-gray-500">Application Flow</p>
+          <div className="space-y-5">
+            {FLOW_STEPS.map((step, index) => {
+              const Icon = step.icon;
+              const isLast = index === FLOW_STEPS.length - 1;
+
+              return (
+                <div key={step.label} className="relative flex gap-4">
+                  {!isLast && <div className="absolute left-[19px] top-11 h-10 w-px bg-white/10" />}
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-neon-cyan/20 bg-neon-cyan/10 text-neon-cyan">
+                    <Icon size={18} />
+                  </div>
+                  <div className="pb-6">
+                    <p className="text-sm font-black uppercase tracking-[0.2em] text-white">{step.label}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-400">{step.note}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-neon-cyan/15 bg-neon-cyan/5 p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-neon-cyan">Progress Snapshot</p>
+            <div className="mt-5 space-y-5">
+              <ProgressMetric label="Journey Completion" value="100%" percentage={100} />
+              <ProgressMetric label="Interview Completion" value={`${TOTAL_QUESTIONS}/${TOTAL_QUESTIONS}`} percentage={100} toneClass="bg-blue-400" />
+              <ProgressMetric label="Readiness Score" value={`${Math.round(report.overall_score * 10)}%`} percentage={report.overall_score * 10} toneClass="bg-emerald-400" />
+            </div>
+          </div>
         </GlassCard>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-        {/* Strong Areas */}
-        <GlassCard className="p-8 border-green-400/10">
-           <h4 className="text-green-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-              <Zap size={16} /> Key Strengths
-           </h4>
-           <ul className="space-y-4">
-              {report.strong_areas.map((area: string, i: number) => (
-                <li key={i} className="flex gap-3 text-sm text-gray-300">
-                   <CheckCircle2 size={18} className="text-green-400 shrink-0 mt-0.5" />
-                   <span>{area}</span>
-                </li>
-              ))}
-           </ul>
-        </GlassCard>
-
-        {/* Weak Areas */}
-        <GlassCard className="p-8 border-red-400/10">
-           <h4 className="text-red-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-              <AlertTriangle size={16} /> Areas For Growth
-           </h4>
-           <ul className="space-y-4">
-              {report.weak_areas.map((area: string, i: number) => (
-                <li key={i} className="flex gap-3 text-sm text-gray-300">
-                   <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
-                   <span>{area}</span>
-                </li>
-              ))}
-           </ul>
-        </GlassCard>
-
-        {/* Communication */}
-        <GlassCard className="p-8 border-blue-400/10">
-           <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-              <MessageSquare size={16} /> Communication
-           </h4>
-           <p className="text-sm text-gray-300 italic leading-relaxed">
-              "{report.communication_assessment}"
-           </p>
-        </GlassCard>
-      </div>
-
-      {/* Recommendations */}
-      <GlassCard className="p-8 border-neon-cyan/20 mb-8 overflow-hidden relative group">
-         <div className="absolute top-0 right-0 w-64 h-64 bg-neon-cyan/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
-         
-         <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-            <Target className="text-neon-cyan" /> Actionable Recommendations
-         </h3>
-         
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {report.recommendations.map((rec: string, i: number) => (
-              <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/5 flex items-start gap-4 hover:border-neon-cyan/20 transition-all group-hover:bg-white/[0.07]">
-                 <div className="w-8 h-8 rounded-full bg-neon-cyan/10 flex items-center justify-center shrink-0">
-                    <span className="text-neon-cyan font-bold text-xs">{i + 1}</span>
-                 </div>
-                 <p className="text-sm text-gray-400 font-medium">{rec}</p>
+      <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <GlassCard className="border-emerald-400/10 p-7">
+          <div className="mb-5 flex items-center gap-3">
+            <CheckCircle2 className="text-emerald-300" />
+            <h3 className="text-lg font-black text-white">Strong Areas</h3>
+          </div>
+          <div className="space-y-3">
+            {report.strong_areas.map((area, index) => (
+              <div key={`${area}-${index}`} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm leading-relaxed text-gray-300">
+                {area}
               </div>
             ))}
-         </div>
-      </GlassCard>
+          </div>
+        </GlassCard>
 
-      <div className="flex justify-center pt-8">
-         <NeonButton onClick={() => { reset(); navigate('/'); }} size="lg">
-            BACK TO DASHBOARD
-         </NeonButton>
+        <GlassCard className="border-red-400/10 p-7">
+          <div className="mb-5 flex items-center gap-3">
+            <AlertTriangle className="text-red-300" />
+            <h3 className="text-lg font-black text-white">Growth Areas</h3>
+          </div>
+          <div className="space-y-3">
+            {report.weak_areas.map((area, index) => (
+              <div key={`${area}-${index}`} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm leading-relaxed text-gray-300">
+                {area}
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        <GlassCard className="border-blue-400/10 p-7">
+          <div className="mb-5 flex items-center gap-3">
+            <FileText className="text-blue-300" />
+            <h3 className="text-lg font-black text-white">Communication</h3>
+          </div>
+          <p className="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm leading-7 text-gray-300">
+            {report.communication_assessment}
+          </p>
+        </GlassCard>
       </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-8 xl:grid-cols-12">
+        <GlassCard className="xl:col-span-7 overflow-hidden border-neon-cyan/15 p-8">
+          <div className="mb-6 flex items-center gap-3">
+            <Target className="text-neon-cyan" />
+            <h3 className="text-xl font-black text-white">Action Plan</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {report.recommendations.map((recommendation, index) => (
+              <div
+                key={`${recommendation}-${index}`}
+                className="rounded-2xl border border-white/5 bg-white/5 p-5 transition-colors hover:border-neon-cyan/20"
+              >
+                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-full bg-neon-cyan/10 text-sm font-black text-neon-cyan">
+                  {index + 1}
+                </div>
+                <p className="text-sm leading-7 text-gray-300">{recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+
+        <GlassCard className="xl:col-span-5 p-8">
+          <div className="mb-6 flex items-center gap-3">
+            <AlertCircle className={verdictStyle.accent} />
+            <h3 className="text-xl font-black text-white">Skill Gaps Vs Job</h3>
+          </div>
+          <div className="space-y-3">
+            {report.skill_gap.map((gap, index) => (
+              <div key={`${gap}-${index}`} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm leading-relaxed text-gray-300">
+                {gap}
+              </div>
+            ))}
+          </div>
+
+          {reportMarkdown && (
+            <div className="mt-8 rounded-2xl border border-white/5 bg-slate-950/35 p-5">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-gray-500">Detailed Written Report</p>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs leading-6 text-gray-300">
+                {reportMarkdown}
+              </pre>
+            </div>
+          )}
+        </GlassCard>
+      </div>
+
+      <GlassCard className="bg-gradient-to-r from-neon-cyan/8 via-transparent to-blue-400/8 p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Next Move</p>
+            <h3 className="text-2xl font-black text-white">Turn this report into your next improvement sprint</h3>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-400">
+              Revisit your profile, close the highlighted skill gaps, and then run another interview to compare your score with this baseline.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <NeonButton onClick={() => navigate('/profile')}>
+              Review Profile
+            </NeonButton>
+            <NeonButton
+              variant="outline"
+              onClick={() => {
+                reset();
+                navigate('/upload');
+              }}
+            >
+              <RotateCcw size={18} />
+              Start New Interview
+            </NeonButton>
+          </div>
+        </div>
+      </GlassCard>
     </div>
   );
 };

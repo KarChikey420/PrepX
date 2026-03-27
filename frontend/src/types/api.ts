@@ -56,6 +56,7 @@ export interface FinalReport {
 
 export interface ReportPollResponse {
   session_id: string;
-  status: 'ready' | 'not_started';
+  status: 'ready' | 'generating' | 'not_started';
   report_markdown: string | null;
+  report: FinalReport | null;
 }
