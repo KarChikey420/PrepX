@@ -1,28 +1,84 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Mic, User, LogOut, Trophy } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Mic, User, LogOut, Trophy, RotateCcw, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../../utils/cn';
 import { useAuthStore } from '../../store/useAuthStore';
-import { useInterviewStore } from '../../store/useInterviewStore';
+import { type InterviewFlowStage, useInterviewStore } from '../../store/useInterviewStore';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Upload', path: '/upload' },
-  { icon: Mic, label: 'Interviews', path: '/interview' },
-  { icon: User, label: 'Profile', path: '/profile' },
-  { icon: Trophy, label: 'Results', path: '/report' },
+  {
+    icon: LayoutDashboard,
+    label: 'Upload',
+    path: '/upload',
+    isEnabled: () => true,
+  },
+  {
+    icon: User,
+    label: 'Profile',
+    path: '/profile',
+    isEnabled: (hasUploadData: boolean) => hasUploadData,
+  },
+  {
+    icon: Mic,
+    label: 'Interview',
+    path: '/interview',
+    isEnabled: (hasUploadData: boolean, hasReport: boolean) => hasUploadData && !hasReport,
+  },
+  {
+    icon: Trophy,
+    label: 'Results',
+    path: '/report',
+    isEnabled: (_hasUploadData: boolean, hasReport: boolean) => hasReport,
+  },
 ];
 
 export const SharedLayout: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
+  const reset = useInterviewStore((state) => state.reset);
   const sessionId = useInterviewStore((state) => state.sessionId);
   const report = useInterviewStore((state) => state.report);
-  const visibleNavItems = navItems.filter((item) => item.path !== '/report' || sessionId || report);
+  const profile = useInterviewStore((state) => state.profile);
+  const flowStage = useInterviewStore((state) => state.flowStage);
+  const hasUploadData = Boolean(sessionId && profile);
+  const hasReport = Boolean(report);
+  const hasSessionFlow = Boolean(sessionId || profile || report);
+  const stageOrder: Record<InterviewFlowStage, number> = {
+    upload: 0,
+    profile: 1,
+    interview: 2,
+    report: 3,
+  };
+  const resolvedNavItems = navItems.map((item) => ({
+    ...item,
+    enabled:
+      item.path === '/interview'
+        ? hasUploadData && stageOrder[flowStage] >= stageOrder.interview && !hasReport
+        : item.path === '/report'
+          ? hasReport && stageOrder[flowStage] >= stageOrder.report
+          : item.isEnabled(hasUploadData, hasReport),
+  }));
 
   const handleLogout = () => {
     logout();
     window.location.href = '/login';
+  };
+
+  const handleNewSession = () => {
+    if (hasSessionFlow) {
+      const shouldReset = window.confirm(
+        'Start a new interview session? Your current uploaded profile and result for this browser will be cleared.'
+      );
+
+      if (!shouldReset) {
+        return;
+      }
+    }
+
+    reset();
+    navigate('/upload');
   };
 
   return (
@@ -37,18 +93,32 @@ export const SharedLayout: React.FC = () => {
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2">
-          {visibleNavItems.map((item) => {
+          {resolvedNavItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
-            
+
+            if (!item.enabled) {
+              return (
+                <div
+                  key={item.path}
+                  className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-600 border border-transparent cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-center w-5 h-5">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">{item.label}</span>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={cn(
                   "flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative",
-                  isActive 
-                    ? "bg-neon-cyan/10 text-neon-cyan" 
+                  isActive
+                    ? "bg-neon-cyan/10 text-neon-cyan"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -65,7 +135,14 @@ export const SharedLayout: React.FC = () => {
           })}
         </nav>
 
-        <div className="p-6 mt-auto border-t border-white/5">
+        <div className="p-6 mt-auto border-t border-white/5 space-y-3">
+          <button
+            onClick={handleNewSession}
+            className="flex items-center gap-4 px-4 py-3 rounded-xl text-neon-cyan hover:bg-neon-cyan/10 transition-colors w-full group border border-neon-cyan/10"
+          >
+            <RotateCcw className="w-5 h-5 group-hover:-rotate-90 transition-transform duration-300" />
+            <span className="font-medium">New Session</span>
+          </button>
           <button 
             onClick={handleLogout}
             className="flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-red-400 transition-colors w-full group"
@@ -81,7 +158,7 @@ export const SharedLayout: React.FC = () => {
         {/* Top Header */}
         <header className="sticky top-0 z-20 h-20 px-8 flex items-center justify-between border-b border-white/5 bg-[#0a192f]/50 backdrop-blur-md">
           <h1 className="text-xl font-bold tracking-tight text-white/90">
-            {visibleNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
+            {resolvedNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
           </h1>
           <div className="flex items-center gap-4">
             <div className="p-2 rounded-full hover:bg-white/5 text-gray-400 relative">

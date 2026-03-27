@@ -7,7 +7,7 @@ import { NeonButton } from '../components/ui/NeonButton';
 import { useInterviewStore } from '../store/useInterviewStore';
 
 export const Profile: React.FC = () => {
-  const { profile } = useInterviewStore();
+  const { profile, advanceFlowStage } = useInterviewStore();
   const navigate = useNavigate();
 
   if (!profile) {
@@ -15,7 +15,12 @@ export const Profile: React.FC = () => {
     return null;
   }
 
+  React.useEffect(() => {
+    advanceFlowStage('interview');
+  }, [advanceFlowStage]);
+
   const handleStart = () => {
+    advanceFlowStage('interview');
     navigate('/interview');
   };
 

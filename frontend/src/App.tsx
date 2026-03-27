@@ -9,6 +9,7 @@ import { AuthError } from './pages/AuthError';
 import { AuthSuccess } from './pages/AuthSuccess';
 import { Report } from './pages/Report';
 import { useAuthStore } from './store/useAuthStore';
+import { type InterviewFlowStage, useInterviewStore } from './store/useInterviewStore';
 import { authService } from './services/authService';
 
 /**
@@ -23,6 +24,52 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   return <>{children}</>;
+};
+
+const FlowRoute: React.FC<{
+  step: 'upload' | 'profile' | 'interview' | 'report';
+  children: React.ReactNode;
+}> = ({ step, children }) => {
+  const sessionId = useInterviewStore((state) => state.sessionId);
+  const profile = useInterviewStore((state) => state.profile);
+  const report = useInterviewStore((state) => state.report);
+  const flowStage = useInterviewStore((state) => state.flowStage);
+
+  const hasUploadData = Boolean(sessionId && profile);
+  const hasReport = Boolean(report);
+  const stageOrder: Record<InterviewFlowStage, number> = {
+    upload: 0,
+    profile: 1,
+    interview: 2,
+    report: 3,
+  };
+  const requiredStage = stageOrder[step];
+
+  if (step === 'upload') {
+    return <>{children}</>;
+  }
+
+  if (!hasUploadData) {
+    return <Navigate to="/upload" replace />;
+  }
+
+  if (step === 'profile') {
+    return <>{children}</>;
+  }
+
+  if (step === 'interview') {
+    if (stageOrder[flowStage] < requiredStage) {
+      return <Navigate to="/profile" replace />;
+    }
+
+    return hasReport ? <Navigate to="/report" replace /> : <>{children}</>;
+  }
+
+  if (stageOrder[flowStage] < requiredStage) {
+    return <Navigate to="/interview" replace />;
+  }
+
+  return hasReport ? <>{children}</> : <Navigate to="/interview" replace />;
 };
 
 const App: React.FC = () => {
@@ -68,10 +115,10 @@ const App: React.FC = () => {
 
         {/* Protected Application Routes */}
         <Route element={<ProtectedRoute><SharedLayout /></ProtectedRoute>}>
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/interview" element={<Interview />} />
-          <Route path="/report" element={<Report />} />
+          <Route path="/upload" element={<FlowRoute step="upload"><Upload /></FlowRoute>} />
+          <Route path="/profile" element={<FlowRoute step="profile"><Profile /></FlowRoute>} />
+          <Route path="/interview" element={<FlowRoute step="interview"><Interview /></FlowRoute>} />
+          <Route path="/report" element={<FlowRoute step="report"><Report /></FlowRoute>} />
           
           {/* Default redirect for unknown paths */}
           <Route path="*" element={<Navigate to="/upload" replace />} />
