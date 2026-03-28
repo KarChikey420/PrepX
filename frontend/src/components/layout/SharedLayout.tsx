@@ -67,16 +67,6 @@ export const SharedLayout: React.FC = () => {
   };
 
   const handleNewSession = () => {
-    if (hasSessionFlow) {
-      const shouldReset = window.confirm(
-        'Start a new interview session? Your current uploaded profile and result for this browser will be cleared.'
-      );
-
-      if (!shouldReset) {
-        return;
-      }
-    }
-
     reset();
     navigate('/upload');
   };
@@ -136,13 +126,16 @@ export const SharedLayout: React.FC = () => {
         </nav>
 
         <div className="p-6 mt-auto border-t border-white/5 space-y-3">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02, backgroundColor: 'rgba(0, 255, 255, 0.1)' }}
+            whileTap={{ scale: 0.98 }}
             onClick={handleNewSession}
-            className="flex items-center gap-4 px-4 py-3 rounded-xl text-neon-cyan hover:bg-neon-cyan/10 transition-colors w-full group border border-neon-cyan/10"
+            className="flex items-center gap-4 px-4 py-3 rounded-xl text-neon-cyan transition-all duration-300 w-full group border border-neon-cyan/20 shadow-[0_0_15px_rgba(0,255,255,0.05)] hover:shadow-[0_0_20px_rgba(0,255,255,0.15)] relative overflow-hidden"
           >
-            <RotateCcw className="w-5 h-5 group-hover:-rotate-90 transition-transform duration-300" />
-            <span className="font-medium">New Session</span>
-          </button>
+            <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/0 via-neon-cyan/5 to-neon-cyan/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+            <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500 relative z-10" />
+            <span className="font-semibold tracking-wide relative z-10 text-glow">New Session</span>
+          </motion.button>
           <button 
             onClick={handleLogout}
             className="flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-red-400 transition-colors w-full group"
