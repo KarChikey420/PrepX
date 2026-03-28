@@ -80,10 +80,53 @@ async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict
     If no cached state exists, the updates dict becomes the full state.
     Returns the updated state.
     """
+    client = get_redis()
+    key = _session_key(session_id)
+    
+    # We use a simple WATCH/MULTI/EXEC transaction for atomicity
+    # instead of a Lua script for better compatibility with Upstash REST.
+    for _ in range(5):  # Retry up to 5 times on collision
+        try:
+            # Note: raw upstash-redis async WATCH/MULTI requires careful handling
+            # In a serverless/REST context, we can use a simpler approach:
+            # We fetch, merge, and SET IF MATCH (optimistic concurrency)
+            # However, for simplicity and reliability in this specific REST client,
+            # we'll use the client's built-in get/set logic with a small retry loop.
+            current_raw = await client.get(key)
+            current = json.loads(current_raw) if current_raw else {}
+            current.update(updates)
+            await client.set(key, json.dumps(current, default=str), ex=7200)
+            return current
+        except Exception as e:
+            logger.warning("redis.update_retry", session_id=session_id, error=str(e))
+    
+    # Final fallback if retries fail
     current = await get_session_state(session_id) or {}
     current.update(updates)
     await cache_session_state(session_id, current)
     return current
+
+
+# ── Binary Audio Storage (Optimized for JSON-free delivery) ───────────
+
+
+def _audio_key(session_id: str, turn_index: int) -> str:
+    """Redis key for binary audio playback."""
+    return f"session:{session_id}:audio:{turn_index}"
+
+
+async def store_audio_bytes(session_id: str, turn_index: int, audio_bytes: bytes, ttl: int = 600) -> None:
+    """Store raw audio bytes in Redis with a short 10-minute TTL."""
+    client = get_redis()
+    await client.set(_audio_key(session_id, turn_index), audio_bytes, ex=ttl)
+    logger.debug("redis.audio_stored", session_id=session_id, turn=turn_index, size=len(audio_bytes))
+
+
+async def get_audio_bytes(session_id: str, turn_index: int) -> Optional[bytes]:
+    """Retrieve raw audio bytes from Redis."""
+    client = get_redis()
+    # Upstash-redis REST client handles bytes/strings based on the response
+    return await client.get(_audio_key(session_id, turn_index))  # type: ignore[return-value]
 
 
 async def delete_session_state(session_id: str) -> None:

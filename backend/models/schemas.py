@@ -87,7 +87,8 @@ class StartResponse(BaseModel):
     """Returned after /start generates 10 questions and delivers Q1."""
     session_id: str
     question_text: str
-    audio_base64: Optional[str] = None      # WAV audio of the first question
+    audio_base64: Optional[str] = None      # Deprecated: use audio_url
+    audio_url: Optional[str] = None         # URL for binary audio playback
     question_number: int = 1
     total_questions: int = 10
     focus_area: str = ""
@@ -103,7 +104,8 @@ class UnifiedTurnResponse(BaseModel):
     mentor_hint: Optional[str] = None       # Empathetic 1-2 sentence encouragement
     feedback: Optional[str] = None          # Actionable feedback (no score)
     question_text: str = ""
-    audio_base64: Optional[str] = None
+    audio_base64: Optional[str] = None      # Deprecated: use audio_url
+    audio_url: Optional[str] = None         # URL for binary audio playback
     question_number: int
     total_questions: int = 10
     focus_area: str = ""
@@ -165,3 +167,12 @@ class HealthResponse(BaseModel):
     version: str
     mongodb: str = "connected"
     redis: str = "connected"
+
+
+class SessionStatusResponse(BaseModel):
+    """GET /interview/{session_id}/status"""
+    session_id: str
+    status: str                              # active | completed | expired
+    current_step: str                        # upload | profile | interview | report
+    question_number: int
+    total_questions: int = 10

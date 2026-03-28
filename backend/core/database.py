@@ -30,8 +30,8 @@ async def init_db() -> None:
 
     _client = AsyncIOMotorClient(
         settings.mongo_link,
-        serverSelectionTimeoutMS=5000,
-        connectTimeoutMS=5000,
+        serverSelectionTimeoutMS=30000,
+        connectTimeoutMS=30000,
     )
 
     await init_beanie(

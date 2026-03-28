@@ -137,7 +137,19 @@ class EvaluatorAgent(BaseAgent):
         if message.tool_calls and len(message.tool_calls) > 0:
             tool_call = message.tool_calls[0]
             arguments_str = tool_call.function.arguments
-            arguments = json.loads(arguments_str)
+            
+            try:
+                # Robust parsing: handle potential prefixes or markdown
+                clean_args = arguments_str.strip()
+                if "```json" in clean_args:
+                    clean_args = clean_args.split("```json")[-1].split("```")[0].strip()
+                elif "```" in clean_args:
+                    clean_args = clean_args.split("```")[-1].split("```")[0].strip()
+                
+                arguments = json.loads(clean_args)
+            except json.JSONDecodeError:
+                logger.error("evaluator.parsing_error", raw=arguments_str)
+                arguments = {}
 
             logger.info(
                 "evaluator.result",

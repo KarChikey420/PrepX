@@ -22,7 +22,8 @@ export interface UploadResponse {
 export interface StartResponse {
   session_id: string;
   question_text: string;
-  audio_base64: string | null;
+  audio_base64: string | null; // Deprecated
+  audio_url: string | null;    // New binary URL
   question_number: number;
   total_questions: number;
   focus_area: string;
@@ -34,7 +35,8 @@ export interface TurnResponse {
   mentor_hint: string | null;
   feedback: string | null;
   question_text: string;
-  audio_base64: string | null;
+  audio_base64: string | null; // Deprecated
+  audio_url: string | null;    // New binary URL
   question_number: number;
   total_questions: number;
   focus_area: string;
@@ -59,4 +61,12 @@ export interface ReportPollResponse {
   status: 'ready' | 'generating' | 'not_started';
   report_markdown: string | null;
   report: FinalReport | null;
+}
+
+export interface SessionStatusResponse {
+  session_id: string;
+  status: 'active' | 'completed' | 'expired';
+  current_step: 'upload' | 'profile' | 'interview' | 'report';
+  question_number: number;
+  total_questions: number;
 }

@@ -9,7 +9,7 @@ import { useInterviewStore } from '../store/useInterviewStore';
 import { useRecorder } from '../hooks/useRecorder';
 
 export const Interview: React.FC = () => {
-  const { sessionId, currentTurn, setTurn, setStatus, setReport } = useInterviewStore();
+  const { sessionId, currentTurn, setTurn, setStatus, setReport, playAudio } = useInterviewStore();
   const { isRecording, audioBlob, startRecording, stopRecording, setAudioBlob } = useRecorder();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -40,8 +40,8 @@ export const Interview: React.FC = () => {
         });
         
         // Auto-play the first question if audio is provided
-        if (data.audio_base64) {
-          playAudio(data.audio_base64);
+        if (data.audio_url) {
+          playAudio(data.audio_url);
         }
       } catch (err) {
         console.error('Failed to start interview:', err);
@@ -60,14 +60,7 @@ export const Interview: React.FC = () => {
     }
   }, [audioBlob]);
 
-  const playAudio = (base64: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    const audio = new Audio(`data:audio/wav;base64,${base64}`);
-    audioRef.current = audio;
-    audio.play();
-  };
+  // Local playback removed in favor of store.playAudio (supports binary URLs)
 
   const handleSubmitAnswer = async (blob: Blob) => {
     if (!sessionId) return;
@@ -81,10 +74,10 @@ export const Interview: React.FC = () => {
 
       if (data.is_complete) {
         handleFinish();
-      } else if (data.audio_base64) {
+      } else if (data.audio_url) {
         // Auto-play next question
         setTimeout(() => {
-          playAudio(data.audio_base64!);
+          playAudio(data.audio_url!);
         }, 1500); // Small delay to let user breathe
       }
     } catch (err) {
@@ -173,7 +166,7 @@ export const Interview: React.FC = () => {
                  <motion.button 
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => currentTurn?.audio_base64 && playAudio(currentTurn.audio_base64)}
+                    onClick={() => currentTurn?.audio_url && playAudio(currentTurn.audio_url)}
                     className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-neon-cyan transition-colors"
                  >
                     <Volume2 size={16} />

@@ -20,9 +20,12 @@ interface InterviewState {
   flowStage: InterviewFlowStage;
   status: 'idle' | 'analyzing' | 'interviewing' | 'finishing' | 'completed';
   error: string | null;
+  audioPlayer: HTMLAudioElement | null;
 
   setSession: (sessionId: string, profile: CandidateProfile) => void;
   setTurn: (turn: TurnResponse) => void;
+  playAudio: (url: string | null) => Promise<void>;
+  validateSession: () => Promise<boolean>;
   setReport: (report: FinalReport) => void;
   advanceFlowStage: (stage: InterviewFlowStage) => void;
   setStatus: (status: InterviewState['status']) => void;
@@ -66,6 +69,46 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   flowStage: initialFlowStage,
   status: 'idle',
   error: null,
+  audioPlayer: null,
+
+  playAudio: async (url) => {
+    if (!url) return;
+    try {
+      const { audioPlayer } = useInterviewStore.getState();
+      if (audioPlayer) {
+        audioPlayer.pause();
+      }
+      
+      const absoluteUrl = url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL}${url}`;
+      const newPlayer = new Audio(absoluteUrl);
+      set({ audioPlayer: newPlayer });
+      await newPlayer.play();
+    } catch (err) {
+      console.error('Failed to play audio:', err);
+    }
+  },
+
+  validateSession: async () => {
+    const { sessionId, reset } = useInterviewStore.getState();
+    if (!sessionId) return false;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/interview/${sessionId}/status`);
+      if (!response.ok) {
+        reset();
+        return false;
+      }
+      const data = await response.json();
+      if (data.status === 'expired') {
+        reset();
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('Session validation failed:', err);
+      return false;
+    }
+  },
 
   setSession: (sessionId, profile) => {
     localStorage.setItem('prepX_sessionId', sessionId);
@@ -83,7 +126,12 @@ export const useInterviewStore = create<InterviewState>((set) => ({
     });
   },
 
-  setTurn: (turn) => set({ currentTurn: turn, status: 'interviewing', error: null }),
+  setTurn: (turn) => {
+    set({ currentTurn: turn, status: 'interviewing', error: null });
+    if (turn.audio_url) {
+      useInterviewStore.getState().playAudio(turn.audio_url);
+    }
+  },
 
   setReport: (report) => {
     localStorage.setItem('prepX_report', JSON.stringify(report));

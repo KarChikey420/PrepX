@@ -34,6 +34,7 @@ from models.schemas import (
     UnifiedTurnResponse,
     UploadResponse,
     EvaluationResult,
+    SessionStatusResponse,
 )
 from models.session import InterviewSession, SessionStatus
 from services.agents.evaluator import EvaluatorAgent
@@ -43,6 +44,8 @@ from services.profile_analyzer import ProfileAnalyzerAgent
 from services.resume_parser import extract_text_from_file
 from services.voice.stt import transcribe_audio
 from services.voice.tts import synthesize_full
+from core.redis import store_audio_bytes, get_audio_bytes
+from fastapi.responses import Response
 
 logger = structlog.get_logger(__name__)
 
@@ -60,8 +63,20 @@ TOTAL_QUESTIONS = 10
 # ── Helpers ────────────────────────────────────────────────────────────
 
 
+async def _synthesize_and_store(session_id: str, turn_index: int, text: str) -> str | None:
+    """Synthesize TTS audio, store in Redis, and return a relative URL."""
+    try:
+        audio_bytes = await synthesize_full(text)
+        if audio_bytes:
+            await store_audio_bytes(session_id, turn_index, audio_bytes)
+            return f"/api/v1/interview/{session_id}/audio/{turn_index}"
+    except Exception as e:
+        logger.warning("unified.tts_failed", error=str(e))
+    return None
+
+
 async def _synthesize_safe(text: str) -> str | None:
-    """Synthesize TTS audio and return Base64 WAV, or None on failure."""
+    """Deprecated: Base64 synthesis. Use _synthesize_and_store instead."""
     try:
         audio_bytes = await synthesize_full(text)
         if audio_bytes:
@@ -180,8 +195,8 @@ async def start_interview(session_id: str) -> StartResponse:
     )
     first_q = questions_dicts[0]
 
-    # 3. TTS audio
-    audio_b64 = await _synthesize_safe(question_text)
+    # 3. TTS audio (Optimized: Binary)
+    audio_url = await _synthesize_and_store(session_id, 0, question_text)
 
     # 4. Update Redis state
     state.questions = questions_dicts
@@ -199,7 +214,7 @@ async def start_interview(session_id: str) -> StartResponse:
     return StartResponse(
         session_id=session_id,
         question_text=question_text,
-        audio_base64=audio_b64,
+        audio_url=audio_url,
         question_number=1,
         total_questions=TOTAL_QUESTIONS,
         focus_area=first_q.get("focus_area", ""),
@@ -335,14 +350,12 @@ async def process_turn(
             "content": next_question_text,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        next_audio_b64 = await _synthesize_safe(next_question_text)
+        audio_url = await _synthesize_and_store(session_id, next_index, next_question_text)
     else:
         state.status = "completed"
+        audio_url = None
 
-    # ── 6. Persist ─────────────────────────────────────────────────────
-    await update_session_state(session_id, state.model_dump())
-
-    # Async MongoDB persist (best-effort)
+    # ── 6. Persist (DB Synchronous consistency fix) ───────────────────
     try:
         session = await InterviewSession.get(PydanticObjectId(session_id))
         if session:
@@ -355,6 +368,9 @@ async def process_turn(
     except Exception as e:
         logger.error("unified.db_persist_error", error=str(e))
 
+    # Finally update Redis
+    await update_session_state(session_id, state.model_dump())
+
     total_ms = round((time.perf_counter() - turn_start) * 1000, 2)
     logger.info("unified.turn_complete", session_id=session_id, total_ms=total_ms, is_complete=is_complete)
 
@@ -363,7 +379,7 @@ async def process_turn(
         mentor_hint=mentor_hint,
         feedback=feedback_text,
         question_text=next_question_text,
-        audio_base64=next_audio_b64,
+        audio_url=audio_url,
         question_number=next_index + 1,  # 1-based for the client
         total_questions=TOTAL_QUESTIONS,
         focus_area=next_focus_area,
@@ -490,3 +506,60 @@ async def get_report(session_id: str) -> ReportPollResponse:
         status="not_started",
         report_markdown=None,
     )
+
+
+# ── UTILITY ENDPOINTS (Status + Binary Audio) ────────────────────────
+
+
+@router.get("/{session_id}/status", response_model=SessionStatusResponse, summary="Check session status")
+async def check_session_status(session_id: str) -> SessionStatusResponse:
+    """Check if session is alive in Redis and return current progress."""
+    state_dict = await get_session_state(session_id)
+    
+    # If not in Redis, check DB
+    if not state_dict:
+        try:
+            session = await InterviewSession.get(PydanticObjectId(session_id))
+            if not session:
+                return SessionStatusResponse(
+                    session_id=session_id, status="expired", current_step="upload", question_number=0
+                )
+            
+            # Map DB status to simplified step
+            step = "upload"
+            if session.resume_parsed and not session.conversation_history:
+                step = "profile"
+            elif session.conversation_history and session.status != SessionStatus.COMPLETED:
+                step = "interview"
+            elif session.status == SessionStatus.COMPLETED:
+                step = "report"
+
+            return SessionStatusResponse(
+                session_id=session_id,
+                status="active" if session.status != SessionStatus.COMPLETED else "completed",
+                current_step=step,
+                question_number=session.current_skill_index or 0
+            )
+        except Exception:
+            return SessionStatusResponse(
+                session_id=session_id, status="expired", current_step="upload", question_number=0
+            )
+
+    state = UnifiedSessionState(**state_dict)
+    return SessionStatusResponse(
+        session_id=session_id,
+        status=state.status,
+        current_step="interview" if state.status == "active" else "report",
+        question_number=state.current_question_index + 1,
+        total_questions=TOTAL_QUESTIONS
+    )
+
+
+@router.get("/{session_id}/audio/{turn_id}", summary="Fetch binary audio WAV")
+async def get_turn_audio(session_id: str, turn_id: int):
+    """Serve binary WAV audio from Redis cache."""
+    audio_bytes = await get_audio_bytes(session_id, turn_id)
+    if not audio_bytes:
+        raise HTTPException(status_code=404, detail="Audio not found or expired.")
+    
+    return Response(content=audio_bytes, media_type="audio/wav")

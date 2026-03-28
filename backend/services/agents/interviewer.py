@@ -125,6 +125,12 @@ class InterviewerAgent(BaseAgent):
         try:
             reframed = await self.generate(prompt)
             question_text = reframed.strip() if reframed.strip() else original_question
+            
+            # Defensive: Remove common prefixes models might add despite instructions
+            for prefix in ["Question:", "Reframed:", "Adjusted:", "Re-framed question:", "Here is the re-framed question:"]:
+                if question_text.lower().startswith(prefix.lower()):
+                    question_text = question_text[len(prefix):].strip()
+                    
         except Exception as e:
             logger.warning("interviewer.reframe_failed", error=str(e), index=current_index)
             question_text = original_question

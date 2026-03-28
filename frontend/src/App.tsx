@@ -74,6 +74,12 @@ const FlowRoute: React.FC<{
 
 const App: React.FC = () => {
   const { setAuth, logout, refreshToken, accessToken } = useAuthStore();
+  const validateSession = useInterviewStore((state) => state.validateSession);
+
+  // Global Session Validation
+  useEffect(() => {
+    validateSession();
+  }, [validateSession]);
 
   // Global Auth Initialization & Token Refreshing
   useEffect(() => {
