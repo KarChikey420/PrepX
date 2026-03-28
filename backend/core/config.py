@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
 
 
 class Settings(BaseSettings):
@@ -63,9 +64,23 @@ class Settings(BaseSettings):
             "http://localhost:5173",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:5173",
+            "https://prep-x-omega.vercel.app",
         ],
         description="Allowed CORS origins",
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            try:
+                # Try parsing as JSON first (e.g., ["http://localhost:3000"])
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # Fallback to comma-separated string
+                return [origin.strip() for origin in v.split(",")]
+        return v
+
     app_name: str = Field(default="PrepX AI Interviewer", description="Application display name")
     app_version: str = Field(default="1.0.0", description="Application version")
 
