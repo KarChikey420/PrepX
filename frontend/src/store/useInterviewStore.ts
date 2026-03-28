@@ -3,7 +3,7 @@ import type { CandidateProfile, TurnResponse, FinalReport } from '../types/api';
 
 export type InterviewFlowStage = 'upload' | 'profile' | 'interview' | 'report';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
 
 const readStoredJson = <T>(key: string): T | null => {
   try {
