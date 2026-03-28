@@ -3,6 +3,8 @@ import type { CandidateProfile, TurnResponse, FinalReport } from '../types/api';
 
 export type InterviewFlowStage = 'upload' | 'profile' | 'interview' | 'report';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const readStoredJson = <T>(key: string): T | null => {
   try {
     const raw = localStorage.getItem(key);
@@ -79,7 +81,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
         audioPlayer.pause();
       }
       
-      const absoluteUrl = url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL}${url}`;
+      const absoluteUrl = new URL(url, API_BASE_URL).toString();
       const newPlayer = new Audio(absoluteUrl);
       set({ audioPlayer: newPlayer });
       await newPlayer.play();
@@ -93,7 +95,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
     if (!sessionId) return false;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/interview/${sessionId}/status`);
+      const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/status`);
       if (!response.ok) {
         reset();
         return false;
@@ -128,9 +130,6 @@ export const useInterviewStore = create<InterviewState>((set) => ({
 
   setTurn: (turn) => {
     set({ currentTurn: turn, status: 'interviewing', error: null });
-    if (turn.audio_url) {
-      useInterviewStore.getState().playAudio(turn.audio_url);
-    }
   },
 
   setReport: (report) => {

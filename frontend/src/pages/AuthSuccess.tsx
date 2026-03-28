@@ -12,21 +12,41 @@ export const AuthSuccess: React.FC = () => {
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
 
+    console.log('AuthSuccess: Processing tokens...', { 
+      hasAccessToken: !!accessToken, 
+      hasRefreshToken: !!refreshToken 
+    });
+
     if (accessToken && refreshToken) {
-      // Fetch user profile info before setting auth.
       const fetchProfile = async () => {
         try {
+          console.log('AuthSuccess: Fetching user profile...');
           const user = await authService.getMe(accessToken);
+          console.log('AuthSuccess: Profile fetched successfully', user);
+          
           setAuth(user, accessToken, refreshToken);
           navigate('/upload', { replace: true });
-        } catch (error) {
-          console.error('Failed to fetch user profile post-login', error);
-          navigate('/login', { replace: true });
+        } catch (error: any) {
+          console.error('AuthSuccess: Failed to fetch user profile post-login', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+          });
+          // Avoid immediate redirect on network errors to allow user to see what happened
+          // if it's a 401, we should definitely go back to login.
+          if (error.response?.status === 401) {
+             navigate('/login', { replace: true });
+          } else {
+             // For other errors, maybe show an error state or retry
+             console.warn('AuthSuccess: Non-401 error, redirecting to login as fallback');
+             navigate('/login', { replace: true });
+          }
         }
       };
       
       fetchProfile();
     } else {
+      console.error('AuthSuccess: Missing tokens in URL params');
       navigate('/login', { replace: true });
     }
   }, [searchParams, navigate, setAuth]);

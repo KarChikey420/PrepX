@@ -64,10 +64,16 @@ async def stream_tts(
             async with client.stream("POST", url, headers=headers, json=payload) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
-                    logger.error("tts.request_failed", status_code=response.status_code, error=error_text.decode())
+                    error_msg = error_text.decode()
+                    logger.error(
+                        "tts.request_failed",
+                        status_code=response.status_code,
+                        error=error_msg,
+                        url=url,
+                    )
                     raise ExternalAPIError(
                         service="DeepgramTTS",
-                        message=f"TTS request failed with status {response.status_code}",
+                        message=f"TTS request failed with status {response.status_code}: {error_msg}",
                     )
 
                 total_bytes_yielded = 0

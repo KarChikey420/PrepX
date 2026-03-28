@@ -71,7 +71,13 @@ async def _synthesize_and_store(session_id: str, turn_index: int, text: str) -> 
             await store_audio_bytes(session_id, turn_index, audio_bytes)
             return f"/api/v1/interview/{session_id}/audio/{turn_index}"
     except Exception as e:
-        logger.warning("unified.tts_failed", error=str(e))
+        logger.error(
+            "unified.tts_failed",
+            session_id=session_id,
+            turn_index=turn_index,
+            error=str(e),
+            exc_info=True,
+        )
     return None
 
 

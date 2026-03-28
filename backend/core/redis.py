@@ -9,6 +9,7 @@ which is ideal for serverless / edge-compatible deployments.
 
 from __future__ import annotations
 
+import base64
 import json
 from typing import Any, Optional
 
@@ -116,17 +117,30 @@ def _audio_key(session_id: str, turn_index: int) -> str:
 
 
 async def store_audio_bytes(session_id: str, turn_index: int, audio_bytes: bytes, ttl: int = 600) -> None:
-    """Store raw audio bytes in Redis with a short 10-minute TTL."""
+    """Store audio bytes as base64 text for safe transport through Upstash REST."""
     client = get_redis()
-    await client.set(_audio_key(session_id, turn_index), audio_bytes, ex=ttl)
+    encoded_audio = base64.b64encode(audio_bytes).decode("ascii")
+    await client.set(_audio_key(session_id, turn_index), encoded_audio, ex=ttl)
     logger.debug("redis.audio_stored", session_id=session_id, turn=turn_index, size=len(audio_bytes))
 
 
 async def get_audio_bytes(session_id: str, turn_index: int) -> Optional[bytes]:
-    """Retrieve raw audio bytes from Redis."""
+    """Retrieve audio bytes that were stored as base64 text."""
     client = get_redis()
-    # Upstash-redis REST client handles bytes/strings based on the response
-    return await client.get(_audio_key(session_id, turn_index))  # type: ignore[return-value]
+    encoded_audio: Optional[str] = await client.get(_audio_key(session_id, turn_index))  # type: ignore[assignment]
+    if encoded_audio is None:
+        return None
+
+    try:
+        return base64.b64decode(encoded_audio)
+    except (TypeError, ValueError) as exc:
+        logger.error(
+            "redis.audio_decode_failed",
+            session_id=session_id,
+            turn=turn_index,
+            error=str(exc),
+        )
+        return None
 
 
 async def delete_session_state(session_id: str) -> None:

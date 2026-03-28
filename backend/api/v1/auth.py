@@ -58,7 +58,11 @@ async def login_google(request: Request) -> Response:
     """
     redirect_uri = settings.google_oauth_redirect_uri
     logger.info("auth.init_google_login", redirect_uri=redirect_uri)
-    return await oauth.google.authorize_redirect(request, redirect_uri)
+    try:
+        return await oauth.google.authorize_redirect(request, redirect_uri)
+    except Exception as e:
+        logger.error("auth.init_failed", error=str(e))
+        return RedirectResponse(url=_frontend_redirect("/auth/error", detail="auth_init_failed"))
 
 
 @router.get("/callback", summary="Google OAuth callback handler", name="auth_callback")
@@ -70,7 +74,10 @@ async def auth_callback(request: Request) -> RedirectResponse:
     try:
         token = await oauth.google.authorize_access_token(request)
         user_info = token.get('userinfo')
+        logger.debug("auth.callback_tokens_received", token_keys=list(token.keys()))
+        
         if not user_info:
+            logger.error("auth.callback_no_userinfo")
             raise HTTPException(status_code=400, detail="Failed to fetch user info from Google")
         
         email = user_info["email"]
@@ -110,6 +117,7 @@ async def auth_callback(request: Request) -> RedirectResponse:
             access_token=access_token,
             refresh_token=refresh_token,
         )
+        logger.info("auth.callback_redirecting", url=response_url)
         return RedirectResponse(url=response_url)
 
     except OAuthError as e:

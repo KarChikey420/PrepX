@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useEffectEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Quote, Loader2, Volume2, Zap } from 'lucide-react';
@@ -14,81 +14,8 @@ export const Interview: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const navigate = useNavigate();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Initialize Interview
-  useEffect(() => {
-    if (!sessionId) {
-      navigate('/upload');
-      return;
-    }
-
-    const startInterview = async () => {
-      try {
-        const data = await interviewService.start(sessionId);
-        setTurn({
-          transcription: '',
-          mentor_hint: 'Ready to begin when you are.',
-          feedback: null,
-          question_text: data.question_text,
-          audio_base64: data.audio_base64,
-          question_number: data.question_number,
-          total_questions: data.total_questions,
-          focus_area: data.focus_area,
-          question_type: data.question_type,
-          is_complete: false
-        });
-        
-        // Auto-play the first question if audio is provided
-        if (data.audio_url) {
-          playAudio(data.audio_url);
-        }
-      } catch (err) {
-        console.error('Failed to start interview:', err);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    startInterview();
-  }, [sessionId, navigate, setTurn]);
-
-  // Handle recorded audio submission
-  useEffect(() => {
-    if (audioBlob && sessionId) {
-      handleSubmitAnswer(audioBlob);
-    }
-  }, [audioBlob]);
-
-  // Local playback removed in favor of store.playAudio (supports binary URLs)
-
-  const handleSubmitAnswer = async (blob: Blob) => {
-    if (!sessionId) return;
-    setIsProcessing(true);
-    setStatus('interviewing');
-
-    try {
-      const data = await interviewService.submitTurn(sessionId, blob);
-      setTurn(data);
-      setAudioBlob(null);
-
-      if (data.is_complete) {
-        handleFinish();
-      } else if (data.audio_url) {
-        // Auto-play next question
-        setTimeout(() => {
-          playAudio(data.audio_url!);
-        }, 1500); // Small delay to let user breathe
-      }
-    } catch (err) {
-      console.error('Failed to submit answer:', err);
-      alert('Error submitting answer. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleFinish = async () => {
+  const handleFinish = useEffectEvent(async () => {
     if (!sessionId) return;
     setIsProcessing(true);
     setStatus('finishing');
@@ -103,7 +30,82 @@ export const Interview: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
+  });
+
+  const handleSubmitAnswer = useEffectEvent(async (blob: Blob) => {
+    if (!sessionId) return;
+    setIsProcessing(true);
+    setStatus('interviewing');
+
+    try {
+      const data = await interviewService.submitTurn(sessionId, blob);
+      setTurn(data);
+      setAudioBlob(null);
+
+      if (data.is_complete) {
+        void handleFinish();
+      } else if (data.audio_url) {
+        // Auto-play next question
+        setTimeout(() => {
+          void playAudio(data.audio_url!);
+        }, 1500); // Small delay to let user breathe
+      }
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
+      alert('Error submitting answer. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  });
+
+  const startInterview = useEffectEvent(async () => {
+    if (!sessionId) return;
+
+    try {
+      const data = await interviewService.start(sessionId);
+      setTurn({
+        transcription: '',
+        mentor_hint: 'Ready to begin when you are.',
+        feedback: null,
+        question_text: data.question_text,
+        audio_base64: data.audio_base64,
+        audio_url: data.audio_url,
+        question_number: data.question_number,
+        total_questions: data.total_questions,
+        focus_area: data.focus_area,
+        question_type: data.question_type,
+        is_complete: false,
+      });
+      
+      // Auto-play the first question if audio is provided
+      if (data.audio_url) {
+        void playAudio(data.audio_url);
+      }
+    } catch (err) {
+      console.error('Failed to start interview:', err);
+    } finally {
+      setIsInitializing(false);
+    }
+  });
+
+  // Initialize Interview
+  useEffect(() => {
+    if (!sessionId) {
+      navigate('/upload');
+      return;
+    }
+
+    void startInterview();
+  }, [sessionId, navigate]);
+
+  // Handle recorded audio submission
+  useEffect(() => {
+    if (audioBlob && sessionId) {
+      void handleSubmitAnswer(audioBlob);
+    }
+  }, [audioBlob, sessionId]);
+
+  // Local playback removed in favor of store.playAudio (supports binary URLs)
 
   if (isInitializing) {
     return (
