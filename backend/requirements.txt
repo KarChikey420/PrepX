@@ -21,8 +21,6 @@ openai==1.58.1
 httpx==0.28.1
 
 # Voice Pipeline
-aiofiles==24.1.0
-websockets==14.1
 deepgram-sdk==3.11.0
 
 # Resilience & Observability
