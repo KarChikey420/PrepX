@@ -3,9 +3,9 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
 const BACKEND_ORIGIN = new URL(API_BASE_URL, typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin).origin;
-const BACKEND_WAKE_TIMEOUT_MS = 10000;
+const BACKEND_WAKE_TIMEOUT_MS = 60000;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
-const BACKEND_WAKE_MAX_ATTEMPTS = 8;
+const BACKEND_WAKE_MAX_ATTEMPTS = 3;
 const BACKEND_READY_CACHE_MS = 10 * 60 * 1000;
 
 let backendReadyUntil = 0;
