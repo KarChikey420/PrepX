@@ -14,6 +14,7 @@ export const Upload: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPreparingBackend, setIsPreparingBackend] = useState(true);
   const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const navigate = useNavigate();
   const setSession = useInterviewStore((state: any) => state.setSession);
 
@@ -53,6 +54,7 @@ export const Upload: React.FC = () => {
 
     setIsUploading(true);
     setBackendWakeError(null);
+    setSubmissionError(null);
     try {
       const data = await interviewService.upload(resume, jd);
       setSession(data.session_id, data.profile);
@@ -73,7 +75,7 @@ export const Upload: React.FC = () => {
         errorMessage = error.message;
       }
       
-      alert(errorMessage);
+      setSubmissionError(errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -180,6 +182,12 @@ export const Upload: React.FC = () => {
         {backendWakeError && (
           <p className="text-center text-sm text-amber-200 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-3 max-w-2xl mx-auto">
             {backendWakeError}
+          </p>
+        )}
+
+        {submissionError && (
+          <p className="text-center text-sm text-rose-200 bg-rose-500/10 border border-rose-400/20 rounded-xl px-4 py-3 max-w-2xl mx-auto">
+            {submissionError}
           </p>
         )}
       </form>
