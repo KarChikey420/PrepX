@@ -13,6 +13,7 @@ export const Upload: React.FC = () => {
   const [jd, setJd] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isPreparingBackend, setIsPreparingBackend] = useState(true);
+  const [isRetryingBackend, setIsRetryingBackend] = useState(false);
   const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -45,6 +46,24 @@ export const Upload: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setResume(e.target.files[0]);
+      setSubmissionError(null);
+    }
+  };
+
+  const handleWakeBackendAgain = async () => {
+    setIsRetryingBackend(true);
+    setIsPreparingBackend(true);
+    setBackendWakeError(null);
+    setSubmissionError(null);
+
+    try {
+      await ensureBackendReady(true);
+    } catch (error) {
+      console.debug('Manual backend wake-up failed:', error);
+      setBackendWakeError('The interview service is still not reachable. Keep this page open for 10 to 15 seconds, then tap Start AI Interview again.');
+    } finally {
+      setIsPreparingBackend(false);
+      setIsRetryingBackend(false);
     }
   };
 
@@ -152,7 +171,10 @@ export const Upload: React.FC = () => {
               className="w-full h-48 md:h-64 bg-slate-900/50 border border-white/10 rounded-xl p-4 text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-neon-cyan/30 focus:ring-1 focus:ring-neon-cyan/20 transition-all resize-none font-medium text-sm md:text-base"
               placeholder="Paste the full job description here..."
               value={jd}
-              onChange={(e) => setJd(e.target.value)}
+              onChange={(e) => {
+                setJd(e.target.value);
+                setSubmissionError(null);
+              }}
               required
             />
           </GlassCard>
@@ -186,9 +208,36 @@ export const Upload: React.FC = () => {
         )}
 
         {submissionError && (
-          <p className="text-center text-sm text-rose-200 bg-rose-500/10 border border-rose-400/20 rounded-xl px-4 py-3 max-w-2xl mx-auto">
-            {submissionError}
-          </p>
+          <div className="max-w-2xl mx-auto rounded-2xl border border-rose-400/20 bg-rose-500/10 px-5 py-5 text-rose-100">
+            <p className="text-center text-sm md:text-base font-medium">
+              {submissionError}
+            </p>
+            <div className="mt-4 space-y-2 text-sm text-rose-100/90">
+              <p>What to do:</p>
+              <p>1. Keep this page open for 10 to 15 seconds so the Render backend can wake up fully.</p>
+              <p>2. Tap `Wake Service Again`, then tap `Start AI Interview` once more.</p>
+              <p>3. If mobile data is unstable, switch to Wi-Fi and try the same resume again.</p>
+            </div>
+            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+              <NeonButton
+                type="button"
+                onClick={() => void handleWakeBackendAgain()}
+                size="md"
+                isLoading={isRetryingBackend}
+                className="w-full sm:w-auto"
+              >
+                {isRetryingBackend ? 'Waking Service...' : 'Wake Service Again'}
+              </NeonButton>
+              <NeonButton
+                type="submit"
+                size="md"
+                variant="outline"
+                className="w-full sm:w-auto"
+              >
+                Try Upload Again
+              </NeonButton>
+            </div>
+          </div>
         )}
       </form>
       
