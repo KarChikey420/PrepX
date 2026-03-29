@@ -39,6 +39,8 @@ export const Upload: React.FC = () => {
       } else if (Array.isArray(detail)) {
         // FastAPI validation errors return an array of objects
         errorMessage = detail.map((d: any) => d.msg || d).join('\n');
+      } else if (error.message === 'Network Error') {
+        errorMessage = 'Network Error: The server might be waking up or your connection is unstable. Please try again in a few seconds.';
       } else if (error.message) {
         errorMessage = error.message;
       }
