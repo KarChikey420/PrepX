@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, FileText, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +14,20 @@ export const Upload: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
   const setSession = useInterviewStore((state: any) => state.setSession);
+
+  // Pre-wake Render backend on component mount
+  useEffect(() => {
+    const wakeUp = async () => {
+      try {
+        // Direct call to health check (ignoring response)
+        // This triggers Render to spin up if it's asleep.
+        await api.get('/health');
+      } catch (e) {
+        console.debug('Cold start ping result (expected if server sleeping):', e);
+      }
+    };
+    wakeUp();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -39,6 +54,8 @@ export const Upload: React.FC = () => {
       } else if (Array.isArray(detail)) {
         // FastAPI validation errors return an array of objects
         errorMessage = detail.map((d: any) => d.msg || d).join('\n');
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = 'Request Timed Out: The analysis is taking longer than expected. Please wait a moment and try again.';
       } else if (error.message === 'Network Error') {
         errorMessage = 'Network Error: The server might be waking up or your connection is unstable. Please try again in a few seconds.';
       } else if (error.message) {

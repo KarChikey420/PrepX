@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1',
-  timeout: 60000, 
+  timeout: 120000, 
 });
 
 api.interceptors.request.use((config) => {
