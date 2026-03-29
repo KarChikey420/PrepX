@@ -78,6 +78,14 @@ export const Upload: React.FC = () => {
     setSubmissionError(null);
     setUploadOverlayTitle('Uploading Resume');
     setUploadOverlayMessage('Sending your resume and job description to PrepX...');
+    
+    // Validate file to prevent iOS/iCloud ghost file Network Errors
+    if (resume.size === 0) {
+      setIsUploading(false);
+      setSubmissionError('The selected file appears to be empty or inaccessible from cloud storage. Please download it to your device first.');
+      return;
+    }
+    
     try {
       const data = await interviewService.upload(resume, jd);
 
