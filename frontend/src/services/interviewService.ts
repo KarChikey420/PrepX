@@ -21,7 +21,7 @@ const sleep = (ms: number) =>
 
 const withBackendRecovery = async <T>(
   request: (attempt: number) => Promise<T>,
-  retryCount = 1,
+  retryCount = 4,
 ): Promise<T> => {
   let lastError: unknown;
 
