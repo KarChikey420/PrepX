@@ -1,7 +1,14 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
+const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
+const BROWSER_ORIGIN = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
+const API_BASE_URL = import.meta.env.DEV
+  ? REMOTE_API_BASE_URL
+  : new URL('/api/v1', BROWSER_ORIGIN).toString();
+const BACKEND_ORIGIN = import.meta.env.DEV
+  ? new URL(REMOTE_API_BASE_URL, BROWSER_ORIGIN).origin
+  : BROWSER_ORIGIN;
 const BACKEND_WAKE_TIMEOUT_MS = 10000;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
 const BACKEND_WAKE_MAX_ATTEMPTS = 8;
@@ -15,16 +22,8 @@ const sleep = (ms: number) =>
     window.setTimeout(resolve, ms);
   });
 
-const getApiBaseUrl = () => {
-  const url = new URL(API_BASE_URL, window.location.origin);
-  if (!url.pathname.endsWith('/')) {
-    url.pathname = `${url.pathname}/`;
-  }
-  return url;
-};
-
 const buildBackendUrl = (path: string) =>
-  new URL(path.replace(/^\//, ''), `${getApiBaseUrl().origin}/`).toString();
+  new URL(path.replace(/^\//, ''), `${BACKEND_ORIGIN}/`).toString();
 
 const warmBackend = async () => {
   let lastError: unknown;

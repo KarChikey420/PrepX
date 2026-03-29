@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/health",
+      "destination": "https://prepx-hz7r.onrender.com/health"
+    },
+    {
+      "source": "/api/v1/(.*)",
+      "destination": "https://prepx-hz7r.onrender.com/api/v1/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
