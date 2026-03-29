@@ -119,47 +119,71 @@ async def upload_resume(
     """
     logger.info("unified.upload_started", filename=resume.filename)
 
-    # 1. Extract text
-    file_bytes = await resume.read()
-    resume_text = await extract_text_from_file(file_bytes, resume.filename or "resume.pdf")
+    # 1. Basic Validation
+    if not job_description.strip():
+        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
 
-    # 2. Analyze resume + JD
-    profile: CandidateProfile = await _analyzer.analyze_resume(resume_text, job_description)
+    try:
+        # 2. Extract text
+        file_bytes = await resume.read()
+        resume_text = await extract_text_from_file(file_bytes, resume.filename or "resume.pdf")
 
-    # 3. Persist session to MongoDB
-    session = InterviewSession(
-        role=profile.job_title_applying_for,
-        level=profile.experience_level,
-        target_skills=profile.technical_skills,
-        candidate_name=profile.candidate_name,
-        experience_level=profile.experience_level,
-        years_of_experience=profile.years_of_experience,
-        technical_skills=profile.technical_skills,
-        soft_skills=profile.soft_skills,
-        past_roles=profile.past_roles,
-        projects=profile.projects,
-        job_title_applying_for=profile.job_title_applying_for,
-        key_jd_requirements=profile.key_jd_requirements,
-        matched_skills=profile.matched_skills,
-        skill_gaps=profile.skill_gaps,
-        interview_focus_areas=profile.interview_focus_areas,
-        resume_parsed=True,
-    )
-    await session.insert()
-    session_id = str(session.id)
+        if not resume_text.strip():
+            logger.warning("unified.upload_empty_text", filename=resume.filename)
+            raise HTTPException(
+                status_code=400, 
+                detail="Could not extract text from the resume. Please ensure it is a text-based PDF or DOCX (not an image or scan)."
+            )
 
-    # 4. Pre-warm Redis with minimal state (questions generated in /start)
-    state = UnifiedSessionState(
-        session_id=session_id,
-        role=profile.job_title_applying_for,
-        level=profile.experience_level,
-        profile=profile.model_dump(),
-    )
-    await cache_session_state(session_id, state.model_dump())
+        # 3. Analyze resume + JD
+        profile: CandidateProfile = await _analyzer.analyze_resume(resume_text, job_description)
 
-    logger.info("unified.upload_complete", session_id=session_id, candidate=profile.candidate_name)
+        # 4. Persist session to MongoDB
+        session = InterviewSession(
+            role=profile.job_title_applying_for,
+            level=profile.experience_level,
+            target_skills=profile.technical_skills,
+            candidate_name=profile.candidate_name,
+            experience_level=profile.experience_level,
+            years_of_experience=profile.years_of_experience,
+            technical_skills=profile.technical_skills,
+            soft_skills=profile.soft_skills,
+            past_roles=profile.past_roles,
+            projects=profile.projects,
+            job_title_applying_for=profile.job_title_applying_for,
+            key_jd_requirements=profile.key_jd_requirements,
+            matched_skills=profile.matched_skills,
+            skill_gaps=profile.skill_gaps,
+            interview_focus_areas=profile.interview_focus_areas,
+            resume_parsed=True,
+        )
+        await session.insert()
+        session_id = str(session.id)
 
-    return UploadResponse(session_id=session_id, profile=profile)
+        # 5. Pre-warm Redis with minimal state (questions generated in /start)
+        state = UnifiedSessionState(
+            session_id=session_id,
+            role=profile.job_title_applying_for,
+            level=profile.experience_level,
+            profile=profile.model_dump(),
+        )
+        await cache_session_state(session_id, state.model_dump())
+
+        logger.info("unified.upload_complete", session_id=session_id, candidate=profile.candidate_name)
+
+        return UploadResponse(session_id=session_id, profile=profile)
+
+    except HTTPException as e:
+        # Re-raise known HTTP exceptions
+        raise e
+    except ValueError as e:
+        # Known LLM parsing / validation errors
+        logger.error("unified.upload_analysis_failed", error=str(e))
+        raise HTTPException(status_code=422, detail=f"Analysis failed: {str(e)}")
+    except Exception as e:
+        # Unexpected internal errors
+        logger.exception("unified.upload_error")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred during profile analysis.")
 
 
 # ── START ──────────────────────────────────────────────────────────────

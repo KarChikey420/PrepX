@@ -29,9 +29,10 @@ export const Upload: React.FC = () => {
       const data = await interviewService.upload(resume, jd);
       setSession(data.session_id, data.profile);
       navigate('/profile');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
-      alert('Failed to analyze profile. Please try again.');
+      const errorMessage = error.response?.data?.detail || 'Failed to analyze profile. Please try again.';
+      alert(errorMessage);
     } finally {
       setIsUploading(false);
     }

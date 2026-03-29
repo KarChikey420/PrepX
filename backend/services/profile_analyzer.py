@@ -74,8 +74,8 @@ JSON SCHEMA:
             data = self._parse_json(response_text)
             return CandidateProfile(**data)
         except Exception as e:
-            logger.error("profile_analyzer.analyze_error", error=str(e))
-            raise ValueError("Failed to parse LLM response into CandidateProfile") from e
+            logger.error("profile_analyzer.analyze_error", error=str(e), raw_response=response_text)
+            raise ValueError(f"Failed to parse LLM response into CandidateProfile: {str(e)}") from e
 
     # ── Question Generation ────────────────────────────────────────────
 
