@@ -38,13 +38,13 @@ export const Upload: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-10">
+    <div className="max-w-4xl mx-auto py-6 md:py-10 px-4 md:px-0">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-12"
       >
-        <h2 className="text-4xl font-black mb-4 text-glow">Analyze Profile</h2>
+        <h2 className="text-3xl md:text-4xl font-black mb-4 text-glow">Analyze Profile</h2>
         <p className="text-gray-400 max-w-lg mx-auto">
           Upload your candidate profile stage, choice your mams.
         </p>
@@ -53,12 +53,12 @@ export const Upload: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Resume Upload */}
-          <GlassCard className="p-8 group hover:border-neon-cyan/30 transition-colors">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+          <GlassCard className="p-4 md:p-8 group hover:border-neon-cyan/30 transition-colors">
+            <h3 className="text-lg md:text-xl font-bold mb-6 flex items-center gap-3">
               <FileText className="text-neon-cyan" /> Resume (PDF/DOCX)
             </h3>
             
-            <label className="relative flex flex-col items-center justify-center h-64 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:bg-white/5 transition-all group-hover:border-neon-cyan/20">
+            <label className="relative flex flex-col items-center justify-center h-48 md:h-64 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:bg-white/5 transition-all group-hover:border-neon-cyan/20">
               <input
                 type="file"
                 className="hidden"
@@ -99,13 +99,13 @@ export const Upload: React.FC = () => {
           </GlassCard>
 
           {/* JD Input */}
-          <GlassCard className="p-8 group hover:border-neon-cyan/30 transition-colors">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+          <GlassCard className="p-4 md:p-8 group hover:border-neon-cyan/30 transition-colors">
+            <h3 className="text-lg md:text-xl font-bold mb-6 flex items-center gap-3">
               <FileText className="text-neon-cyan" /> Job Description
             </h3>
             
             <textarea
-              className="w-full h-64 bg-slate-900/50 border border-white/10 rounded-xl p-4 text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-neon-cyan/30 focus:ring-1 focus:ring-neon-cyan/20 transition-all resize-none font-medium"
+              className="w-full h-48 md:h-64 bg-slate-900/50 border border-white/10 rounded-xl p-4 text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-neon-cyan/30 focus:ring-1 focus:ring-neon-cyan/20 transition-all resize-none font-medium text-sm md:text-base"
               placeholder="Paste the full job description here..."
               value={jd}
               onChange={(e) => setJd(e.target.value)}

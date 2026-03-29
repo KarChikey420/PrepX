@@ -25,20 +25,20 @@ export const Profile: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-6">
+    <div className="max-w-6xl mx-auto py-4 md:py-6 px-4 md:px-0">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         className="mb-8"
       >
         <span className="text-neon-cyan font-bold tracking-widest text-xs uppercase mb-2 block">CANDIDATE ANALYTICS</span>
-        <h2 className="text-4xl font-black text-glow">Profile Insights</h2>
+        <h2 className="text-3xl md:text-4xl font-black text-glow">Profile Insights</h2>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Basic Info & DNA animation */}
         <div className="lg:col-span-1 space-y-8">
-          <GlassCard className="p-8 relative overflow-hidden group">
+          <GlassCard className="p-4 md:p-8 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-neon-cyan/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
             
             <div className="flex flex-col items-center text-center">
@@ -62,7 +62,7 @@ export const Profile: React.FC = () => {
           </GlassCard>
 
           {/* DNA-like Visualization Card */}
-          <GlassCard className="p-8 h-64 flex flex-col items-center justify-center overflow-hidden">
+          <GlassCard className="p-4 md:p-8 h-48 md:h-64 flex flex-col items-center justify-center overflow-hidden">
             <div className="relative w-full h-full flex items-center justify-center">
               {[...Array(8)].map((_, i) => (
                 <motion.div
@@ -151,13 +151,13 @@ export const Profile: React.FC = () => {
             </GlassCard>
           </div>
 
-          <GlassCard className="p-8 border-neon-cyan/20 bg-gradient-to-br from-neon-cyan/5 to-transparent relative overflow-hidden group">
+          <GlassCard className="p-4 md:p-8 border-neon-cyan/20 bg-gradient-to-br from-neon-cyan/5 to-transparent relative overflow-hidden group">
             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div>
-                <h3 className="text-2xl font-black mb-2 flex items-center gap-3 italic">
+              <div className="text-center md:text-left">
+                <h3 className="text-xl md:text-2xl font-black mb-2 flex items-center justify-center md:justify-start gap-3 italic">
                    <ChevronRight className="text-neon-cyan" /> Ready for Assessment?
                 </h3>
-                <p className="text-gray-400 text-sm max-w-lg">
+                <p className="text-gray-400 text-xs md:text-sm max-w-lg mx-auto md:mx-0">
                    The AI is prepped with 10 questions tailored to your {profile.experience_level} level profile. 
                    Focusing on {profile.interview_focus_areas[0]} & your matching skill set.
                 </p>

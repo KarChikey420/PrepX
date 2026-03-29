@@ -182,12 +182,12 @@ export const Report: React.FC = () => {
   const focusAreaCount = profile?.interview_focus_areas.length || report.strong_areas.length || report.weak_areas.length || 1;
 
   return (
-    <div className="mx-auto max-w-7xl py-6">
+    <div className="mx-auto max-w-7xl py-4 md:py-6 px-4 md:px-0">
       <div className="mb-10 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Result Section</p>
-          <h2 className="text-4xl font-black tracking-tight text-white">Interview Progress And Score</h2>
-          <p className="mt-3 max-w-3xl text-base leading-relaxed text-gray-400">
+        <div className="flex-1">
+          <p className="mb-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Result Section</p>
+          <h2 className="text-2xl md:text-4xl font-black tracking-tight text-white">Interview Progress And Score</h2>
+          <p className="mt-3 max-w-3xl text-sm md:text-base leading-relaxed text-gray-400">
             Review the full journey from upload to final report, then use the score and recommendations to plan your next interview round.
           </p>
         </div>
@@ -205,10 +205,10 @@ export const Report: React.FC = () => {
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-8 xl:grid-cols-12">
-        <GlassCard className={`xl:col-span-8 overflow-hidden bg-gradient-to-br ${verdictStyle.panel} p-8 md:p-10`}>
+        <GlassCard className={`xl:col-span-8 overflow-hidden bg-gradient-to-br ${verdictStyle.panel} p-4 md:p-10`}>
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
-            <div className="flex justify-center">
-              <CircularScore score={report.overall_score} size={220} label="Overall Score" />
+            <div className="flex justify-center scale-90 md:scale-100">
+              <CircularScore score={report.overall_score} size={200} label="Overall Score" />
             </div>
 
             <div>
@@ -217,13 +217,13 @@ export const Report: React.FC = () => {
                 {report.verdict}
               </div>
 
-              <h3 className="mb-3 text-3xl font-black text-white">
+              <h3 className="mb-3 text-2xl md:text-3xl font-black text-white text-center lg:text-left">
                 {profile?.candidate_name || 'Candidate Result'}
               </h3>
-              <p className="mb-2 text-sm uppercase tracking-[0.24em] text-gray-500">
+              <p className="mb-2 text-xs md:text-sm uppercase tracking-[0.24em] text-gray-500 text-center lg:text-left">
                 {profile?.job_title_applying_for || 'Interview Role'}
               </p>
-              <p className="max-w-2xl text-base leading-relaxed text-gray-300">
+              <p className="max-w-2xl text-xs md:text-base leading-relaxed text-gray-300 text-center lg:text-left">
                 {report.overall_summary}
               </p>
 
@@ -248,7 +248,7 @@ export const Report: React.FC = () => {
           </div>
         </GlassCard>
 
-        <GlassCard className="xl:col-span-4 p-8">
+        <GlassCard className="xl:col-span-4 p-4 md:p-8">
           <p className="mb-6 text-xs font-bold uppercase tracking-[0.28em] text-gray-500">Application Flow</p>
           <div className="space-y-5">
             {FLOW_STEPS.map((step, index) => {
@@ -281,8 +281,8 @@ export const Report: React.FC = () => {
         </GlassCard>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <GlassCard className="border-emerald-400/10 p-7">
+      <div className="mb-8 grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-3">
+        <GlassCard className="border-emerald-400/10 p-5 md:p-7">
           <div className="mb-5 flex items-center gap-3">
             <CheckCircle2 className="text-emerald-300" />
             <h3 className="text-lg font-black text-white">Strong Areas</h3>
@@ -296,7 +296,7 @@ export const Report: React.FC = () => {
           </div>
         </GlassCard>
 
-        <GlassCard className="border-red-400/10 p-7">
+        <GlassCard className="border-red-400/10 p-5 md:p-7">
           <div className="mb-5 flex items-center gap-3">
             <AlertTriangle className="text-red-300" />
             <h3 className="text-lg font-black text-white">Growth Areas</h3>
@@ -310,7 +310,7 @@ export const Report: React.FC = () => {
           </div>
         </GlassCard>
 
-        <GlassCard className="border-blue-400/10 p-7">
+        <GlassCard className="border-blue-400/10 p-5 md:p-7">
           <div className="mb-5 flex items-center gap-3">
             <FileText className="text-blue-300" />
             <h3 className="text-lg font-black text-white">Communication</h3>
@@ -322,7 +322,7 @@ export const Report: React.FC = () => {
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-8 xl:grid-cols-12">
-        <GlassCard className="xl:col-span-7 overflow-hidden border-neon-cyan/15 p-8">
+        <GlassCard className="xl:col-span-7 overflow-hidden border-neon-cyan/15 p-4 md:p-8">
           <div className="mb-6 flex items-center gap-3">
             <Target className="text-neon-cyan" />
             <h3 className="text-xl font-black text-white">Action Plan</h3>
@@ -342,7 +342,7 @@ export const Report: React.FC = () => {
           </div>
         </GlassCard>
 
-        <GlassCard className="xl:col-span-5 p-8">
+        <GlassCard className="xl:col-span-5 p-4 md:p-8">
           <div className="mb-6 flex items-center gap-3">
             <AlertCircle className={verdictStyle.accent} />
             <h3 className="text-xl font-black text-white">Skill Gaps Vs Job</h3>
@@ -366,12 +366,12 @@ export const Report: React.FC = () => {
         </GlassCard>
       </div>
 
-      <GlassCard className="bg-gradient-to-r from-neon-cyan/8 via-transparent to-blue-400/8 p-8">
+      <GlassCard className="bg-gradient-to-r from-neon-cyan/8 via-transparent to-blue-400/8 p-4 md:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Next Move</p>
-            <h3 className="text-2xl font-black text-white">Turn this report into your next improvement sprint</h3>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-400">
+          <div className="text-center lg:text-left">
+            <p className="mb-2 text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Next Move</p>
+            <h3 className="text-xl md:text-2xl font-black text-white">Turn this report into your next improvement sprint</h3>
+            <p className="mt-2 max-w-2xl text-xs md:text-sm leading-7 text-gray-400">
               Revisit your profile, close the highlighted skill gaps, and then run another interview to compare your score with this baseline.
             </p>
           </div>

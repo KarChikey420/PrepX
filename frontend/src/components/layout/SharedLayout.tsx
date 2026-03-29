@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Mic, User, LogOut, Trophy, RotateCcw, Lock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { LayoutDashboard, Mic, User, LogOut, Trophy, RotateCcw, Lock, Menu, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../utils/cn';
 import { useAuthStore } from '../../store/useAuthStore';
 import { type InterviewFlowStage, useInterviewStore } from '../../store/useInterviewStore';
@@ -34,6 +34,7 @@ const navItems = [
 ];
 
 export const SharedLayout: React.FC = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
@@ -44,7 +45,6 @@ export const SharedLayout: React.FC = () => {
   const flowStage = useInterviewStore((state) => state.flowStage);
   const hasUploadData = Boolean(sessionId && profile);
   const hasReport = Boolean(report);
-  const hasSessionFlow = Boolean(sessionId || profile || report);
   const stageOrder: Record<InterviewFlowStage, number> = {
     upload: 0,
     profile: 1,
@@ -72,14 +72,38 @@ export const SharedLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#0a192f] text-gray-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#0a192f] text-gray-100 overflow-hidden font-sans relative">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900/50 backdrop-blur-2xl border-r border-white/10 flex flex-col z-20">
-        <div className="p-8 flex items-center gap-3">
-          <div className="w-10 h-10 bg-neon-cyan rounded-xl flex items-center justify-center shadow-neon-glow">
-            <span className="text-slate-950 font-black text-2xl italic">P</span>
+      <aside className={cn(
+        "fixed lg:relative w-64 h-full bg-slate-900/50 backdrop-blur-2xl border-r border-white/10 flex flex-col z-40 transition-transform duration-300 transform",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        <div className="p-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-neon-cyan rounded-xl flex items-center justify-center shadow-neon-glow">
+              <span className="text-slate-950 font-black text-2xl italic">P</span>
+            </div>
+            <span className="text-2xl font-black tracking-tight text-glow">PrepX</span>
           </div>
-          <span className="text-2xl font-black tracking-tight tracking-[-0.05em] text-glow">PrepX</span>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden p-2 text-gray-400 hover:text-white"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-8 space-y-2">
@@ -111,6 +135,7 @@ export const SharedLayout: React.FC = () => {
                     ? "bg-neon-cyan/10 text-neon-cyan"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
+                onClick={() => setIsSidebarOpen(false)}
               >
                 {isActive && (
                   <motion.div
@@ -149,10 +174,18 @@ export const SharedLayout: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 relative overflow-y-auto">
         {/* Top Header */}
-        <header className="sticky top-0 z-20 h-20 px-8 flex items-center justify-between border-b border-white/5 bg-[#0a192f]/50 backdrop-blur-md">
-          <h1 className="text-xl font-bold tracking-tight text-white/90">
-            {resolvedNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
-          </h1>
+        <header className="sticky top-0 z-20 h-20 px-4 md:px-8 flex items-center justify-between border-b border-white/5 bg-[#0a192f]/50 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h1 className="text-xl font-bold tracking-tight text-white/90">
+              {resolvedNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
+            </h1>
+          </div>
           <div className="flex items-center gap-4">
             <div className="p-2 rounded-full hover:bg-white/5 text-gray-400 relative">
               <div className="absolute top-2 right-2 w-2 h-2 bg-neon-cyan rounded-full border-2 border-slate-900" />
@@ -162,7 +195,7 @@ export const SharedLayout: React.FC = () => {
         </header>
 
         {/* Content Area */}
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <Outlet />
         </div>
       </main>

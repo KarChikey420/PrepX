@@ -125,20 +125,20 @@ export const Interview: React.FC = () => {
     : 0;
 
   return (
-    <div className="max-w-5xl mx-auto py-6">
-      <div className="flex items-center justify-between mb-10">
+    <div className="max-w-5xl mx-auto py-4 md:py-6 px-4 md:px-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
           <span className="text-neon-cyan font-bold tracking-widest text-xs uppercase block mb-1">LIVE ASSESSMENT</span>
-          <h2 className="text-3xl font-black text-glow">
+          <h2 className="text-2xl md:text-3xl font-black text-glow">
             {currentTurn?.focus_area || 'Core Interview'}
           </h2>
         </div>
         
-        <div className="text-right">
-          <div className="text-xs text-gray-500 uppercase font-black mb-2 tracking-tighter">
+        <div className="flex flex-col items-start md:items-end">
+          <div className="text-[10px] text-gray-500 uppercase font-black mb-2 tracking-tighter">
             Progress {currentTurn?.question_number}/{currentTurn?.total_questions}
           </div>
-          <div className="w-48 h-2 bg-slate-800 rounded-full overflow-hidden border border-white/5">
+          <div className="w-full md:w-48 h-1.5 md:h-2 bg-slate-800 rounded-full overflow-hidden border border-white/5">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
@@ -150,8 +150,8 @@ export const Interview: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Main Q&A Area */}
-        <div className="lg:col-span-8 space-y-8">
-          <GlassCard className="p-10 relative overflow-hidden min-h-[300px] flex flex-col justify-center">
+        <div className="lg:col-span-8 space-y-6 md:space-y-8">
+          <GlassCard className="p-6 md:p-10 relative overflow-hidden min-h-[250px] md:min-h-[300px] flex flex-col justify-center">
             <div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan/20" />
             <Quote className="absolute top-8 left-8 w-12 h-12 text-neon-cyan/5 -scale-x-100" />
             
@@ -175,7 +175,7 @@ export const Interview: React.FC = () => {
                  </motion.button>
               </div>
               
-              <h3 className="text-2xl md:text-3xl font-bold leading-relaxed px-4">
+              <h3 className="text-xl md:text-3xl font-bold leading-relaxed px-4 md:px-8">
                 {currentTurn?.question_text}
               </h3>
             </motion.div>
@@ -200,17 +200,17 @@ export const Interview: React.FC = () => {
                 key="transcription-card"
                 className="space-y-6"
               >
-                <GlassCard className="p-6 bg-blue-500/5 border-blue-500/10">
+                <GlassCard className="p-4 md:p-6 bg-blue-500/5 border-blue-500/10">
                   <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 block">YOUR TRANSCRIPTION</span>
-                  <p className="text-gray-300 italic leading-relaxed text-sm">
+                  <p className="text-gray-300 italic leading-relaxed text-xs md:text-sm">
                     "{currentTurn.transcription}"
                   </p>
                 </GlassCard>
                 
                 {currentTurn.feedback && (
-                  <GlassCard className="p-6 bg-green-500/5 border-green-500/10">
+                  <GlassCard className="p-4 md:p-6 bg-green-500/5 border-green-500/10">
                     <span className="text-[10px] font-black text-green-400 uppercase tracking-widest mb-3 block">CONSTRUCTIVE FEEDBACK</span>
-                    <p className="text-gray-300 text-sm">
+                    <p className="text-gray-300 text-xs md:text-sm">
                       {currentTurn.feedback}
                     </p>
                   </GlassCard>
@@ -255,12 +255,12 @@ export const Interview: React.FC = () => {
                  animate={{ opacity: 1, x: 0 }}
                  className="space-y-4"
                >
-                 <GlassCard className="p-6 border-neon-cyan/20 relative overflow-hidden bg-gradient-to-br from-neon-cyan/5 to-transparent">
+                 <GlassCard className="p-4 md:p-6 border-neon-cyan/20 relative overflow-hidden bg-gradient-to-br from-neon-cyan/5 to-transparent">
                     <div className="absolute -top-4 -right-4 w-12 h-12 bg-neon-cyan/10 rounded-full blur-xl" />
                     <span className="text-[10px] font-black text-neon-cyan uppercase tracking-widest mb-3 flex items-center gap-2">
                        <Zap size={14} /> AI MENTOR TIP
                     </span>
-                    <p className="text-gray-300 text-sm leading-relaxed italic">
+                    <p className="text-gray-300 text-xs md:text-sm leading-relaxed italic">
                       "{currentTurn.mentor_hint}"
                     </p>
                  </GlassCard>
