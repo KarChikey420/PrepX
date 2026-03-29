@@ -13,11 +13,7 @@ export const interviewService = {
     formData.append('resume', resume);
     formData.append('job_description', jobDescription);
     
-    const response = await api.post<UploadResponse>('/interview/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post<UploadResponse>('/interview/upload', formData);
     return response.data;
   },
 
@@ -30,11 +26,7 @@ export const interviewService = {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     
-    const response = await api.post<TurnResponse>(`/interview/${sessionId}/turn`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post<TurnResponse>(`/interview/${sessionId}/turn`, formData);
     return response.data;
   },
 
