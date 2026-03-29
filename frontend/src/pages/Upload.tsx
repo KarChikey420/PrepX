@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { ensureBackendReady, isRecoverableNetworkError } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, FileText, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,21 +12,33 @@ export const Upload: React.FC = () => {
   const [resume, setResume] = useState<File | null>(null);
   const [jd, setJd] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isPreparingBackend, setIsPreparingBackend] = useState(true);
+  const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
   const navigate = useNavigate();
   const setSession = useInterviewStore((state: any) => state.setSession);
 
   // Pre-wake Render backend on component mount
   useEffect(() => {
-    const wakeUp = async () => {
-      try {
-        // Direct call to health check (ignoring response)
-        // This triggers Render to spin up if it's asleep.
-        await api.get('/health');
-      } catch (e) {
-        console.debug('Cold start ping result (expected if server sleeping):', e);
-      }
+    let isMounted = true;
+
+    void ensureBackendReady()
+      .then(() => {
+        if (isMounted) {
+          setIsPreparingBackend(false);
+          setBackendWakeError(null);
+        }
+      })
+      .catch((error) => {
+        console.debug('Backend warm-up did not finish before user interaction:', error);
+        if (isMounted) {
+          setIsPreparingBackend(false);
+          setBackendWakeError('The interview service is still waking up. Start will retry once it is reachable.');
+        }
+      });
+
+    return () => {
+      isMounted = false;
     };
-    wakeUp();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,6 +52,7 @@ export const Upload: React.FC = () => {
     if (!resume || !jd) return;
 
     setIsUploading(true);
+    setBackendWakeError(null);
     try {
       const data = await interviewService.upload(resume, jd);
       setSession(data.session_id, data.profile);
@@ -54,10 +67,8 @@ export const Upload: React.FC = () => {
       } else if (Array.isArray(detail)) {
         // FastAPI validation errors return an array of objects
         errorMessage = detail.map((d: any) => d.msg || d).join('\n');
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        errorMessage = 'Request Timed Out: The analysis is taking longer than expected. Please wait a moment and try again.';
-      } else if (error.message === 'Network Error') {
-        errorMessage = 'Network Error: The server might be waking up or your connection is unstable. Please try again in a few seconds.';
+      } else if (isRecoverableNetworkError(error)) {
+        errorMessage = 'Network Error: The server might still be waking up or your mobile connection may have dropped. Please wait a few seconds and try again.';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -149,12 +160,28 @@ export const Upload: React.FC = () => {
           <NeonButton 
             size="lg" 
             isLoading={isUploading} 
-            disabled={!resume || !jd}
+            disabled={!resume || !jd || (isPreparingBackend && !backendWakeError)}
             className="w-full max-w-sm"
           >
-            {isUploading ? 'Analyzing...' : 'START AI INTERVIEW'}
+            {isUploading
+              ? 'Analyzing...'
+              : isPreparingBackend && !backendWakeError
+                ? 'Preparing Interview...'
+                : 'START AI INTERVIEW'}
           </NeonButton>
         </div>
+
+        {isPreparingBackend && !backendWakeError && (
+          <p className="text-center text-sm text-cyan-200/80">
+            Waking up the interview service so mobile uploads don&apos;t hit a cold server.
+          </p>
+        )}
+
+        {backendWakeError && (
+          <p className="text-center text-sm text-amber-200 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-3 max-w-2xl mx-auto">
+            {backendWakeError}
+          </p>
+        )}
       </form>
       
       {/* Loading Overlay */}

@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Quote, Loader2, Volume2, Zap } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { MicRipple } from '../components/ui/MicRipple';
+import { NeonButton } from '../components/ui/NeonButton';
+import { isRecoverableNetworkError } from '../services/api';
 import { interviewService } from '../services/interviewService';
 import { useInterviewStore } from '../store/useInterviewStore';
 import { useRecorder } from '../hooks/useRecorder';
@@ -13,6 +15,7 @@ export const Interview: React.FC = () => {
   const { isRecording, audioBlob, startRecording, stopRecording, setAudioBlob } = useRecorder();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleFinish = useEffectEvent(async () => {
@@ -61,6 +64,9 @@ export const Interview: React.FC = () => {
   const startInterview = useEffectEvent(async () => {
     if (!sessionId) return;
 
+    setIsInitializing(true);
+    setInitializationError(null);
+
     try {
       const data = await interviewService.start(sessionId);
       setTurn({
@@ -83,6 +89,11 @@ export const Interview: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to start interview:', err);
+      if (isRecoverableNetworkError(err)) {
+        setInitializationError('The interview service is still waking up or your connection dropped for a moment. Tap retry to continue.');
+      } else {
+        setInitializationError('We could not start the interview right now. Please try again.');
+      }
     } finally {
       setIsInitializing(false);
     }
@@ -116,6 +127,36 @@ export const Interview: React.FC = () => {
            className="w-16 h-16 border-4 border-neon-cyan/20 border-t-neon-cyan rounded-full mb-6 shadow-neon-glow"
         />
         <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Initializing Session...</p>
+      </div>
+    );
+  }
+
+  if (initializationError) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 md:py-12 px-4 md:px-0">
+        <GlassCard className="p-6 md:p-8 text-center border-amber-400/20 bg-amber-500/5">
+          <span className="text-[10px] font-black text-amber-300 uppercase tracking-widest block mb-3">
+            Interview Not Ready Yet
+          </span>
+          <h2 className="text-2xl md:text-3xl font-black mb-4 text-white">
+            We hit a connection problem while starting your session.
+          </h2>
+          <p className="text-gray-300 mb-8 leading-relaxed">
+            {initializationError}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <NeonButton onClick={() => void startInterview()} size="lg">
+              Retry Start
+            </NeonButton>
+            <NeonButton
+              onClick={() => navigate('/profile')}
+              size="lg"
+              variant="outline"
+            >
+              Back to Profile
+            </NeonButton>
+          </div>
+        </GlassCard>
       </div>
     );
   }

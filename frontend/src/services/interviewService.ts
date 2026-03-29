@@ -1,4 +1,4 @@
-import api from './api';
+import api, { ensureBackendReady } from './api';
 import type { 
   UploadResponse, 
   StartResponse, 
@@ -9,6 +9,8 @@ import type {
 
 export const interviewService = {
   upload: async (resume: File, jobDescription: string): Promise<UploadResponse> => {
+    await ensureBackendReady();
+
     const formData = new FormData();
     formData.append('resume', resume);
     formData.append('job_description', jobDescription);
@@ -18,6 +20,8 @@ export const interviewService = {
   },
 
   start: async (sessionId: string): Promise<StartResponse> => {
+    await ensureBackendReady();
+
     const response = await api.post<StartResponse>(`/interview/${sessionId}/start`);
     return response.data;
   },
