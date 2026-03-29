@@ -7,13 +7,49 @@ import { useAuthStore } from '../store/useAuthStore';
 
 export const Login: React.FC = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [isPreparingLogin, setIsPreparingLogin] = React.useState(false);
+  const [isSignInServiceReady, setIsSignInServiceReady] = React.useState(false);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
 
   if (isAuthenticated) {
     return <Navigate to="/upload" replace />;
   }
 
-  const handleGoogleLogin = () => {
-    window.location.href = authService.getGoogleLoginUrl();
+  React.useEffect(() => {
+    let isMounted = true;
+
+    void authService
+      .prewarmGoogleLogin()
+      .then(() => {
+        if (isMounted) {
+          setIsSignInServiceReady(true);
+          setLoginError(null);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsSignInServiceReady(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setIsPreparingLogin(true);
+    setLoginError(null);
+
+    try {
+      await authService.prewarmGoogleLogin();
+      setIsSignInServiceReady(true);
+      window.location.href = authService.getGoogleLoginUrl();
+    } catch {
+      setIsSignInServiceReady(false);
+      setLoginError('Google sign-in is taking longer than usual to wake up. Please try again in a moment.');
+      setIsPreparingLogin(false);
+    }
   };
 
   return (
@@ -44,11 +80,28 @@ export const Login: React.FC = () => {
         <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg group"
+            disabled={isPreparingLogin}
+            className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg group disabled:cursor-wait disabled:opacity-80 disabled:hover:scale-100"
           >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6" />
-            Sign in with Google
+            {isPreparingLogin ? (
+              <div className="w-6 h-6 border-[3px] border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+            ) : (
+              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6" />
+            )}
+            {isPreparingLogin ? 'Opening Google Sign-In...' : 'Sign in with Google'}
           </button>
+
+          {!isSignInServiceReady && !loginError && (
+            <p className="text-sm text-cyan-200/80 text-center">
+              Waking up secure sign-in so Google opens directly from here.
+            </p>
+          )}
+
+          {loginError && (
+            <p className="text-sm text-amber-200 text-center bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-3">
+              {loginError}
+            </p>
+          )}
           
           <div className="relative py-4">
             <div className="absolute inset-0 flex items-center">
