@@ -1,14 +1,8 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
-const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
-const BROWSER_ORIGIN = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
-const API_BASE_URL = import.meta.env.DEV
-  ? REMOTE_API_BASE_URL
-  : new URL('/api/v1', BROWSER_ORIGIN).toString();
-const BACKEND_ORIGIN = import.meta.env.DEV
-  ? new URL(REMOTE_API_BASE_URL, BROWSER_ORIGIN).origin
-  : BROWSER_ORIGIN;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
+const BACKEND_ORIGIN = new URL(API_BASE_URL, typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin).origin;
 const BACKEND_WAKE_TIMEOUT_MS = 10000;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
 const BACKEND_WAKE_MAX_ATTEMPTS = 8;
