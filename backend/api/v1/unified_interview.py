@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 import structlog
 
 from core.redis import get_redis, cache_session_state, get_session_state, update_session_state
@@ -58,6 +58,143 @@ _interviewer = InterviewerAgent()
 _mentor = MentorAgent()
 
 TOTAL_QUESTIONS = 10
+
+
+def _session_profile(session: InterviewSession) -> CandidateProfile | None:
+    """Build a candidate profile from a persisted session when analysis is complete."""
+    if (
+        not session.resume_parsed
+        or not session.candidate_name
+        or not session.experience_level
+        or session.years_of_experience is None
+        or not session.job_title_applying_for
+    ):
+        return None
+
+    return CandidateProfile(
+        candidate_name=session.candidate_name,
+        experience_level=session.experience_level,
+        years_of_experience=session.years_of_experience,
+        technical_skills=session.technical_skills or [],
+        soft_skills=session.soft_skills or [],
+        past_roles=session.past_roles or [],
+        projects=session.projects or [],
+        job_title_applying_for=session.job_title_applying_for,
+        key_jd_requirements=session.key_jd_requirements or [],
+        matched_skills=session.matched_skills or [],
+        skill_gaps=session.skill_gaps or [],
+        interview_focus_areas=session.interview_focus_areas or [],
+    )
+
+
+def _apply_profile_to_session(session: InterviewSession, profile: CandidateProfile) -> None:
+    """Persist analyzed profile fields onto the session document."""
+    session.role = profile.job_title_applying_for
+    session.level = profile.experience_level
+    session.target_skills = (
+        profile.technical_skills
+        or profile.interview_focus_areas
+        or profile.skill_gaps
+        or ["general_interview"]
+    )
+    session.candidate_name = profile.candidate_name
+    session.experience_level = profile.experience_level
+    session.years_of_experience = profile.years_of_experience
+    session.technical_skills = profile.technical_skills
+    session.soft_skills = profile.soft_skills
+    session.past_roles = profile.past_roles
+    session.projects = profile.projects
+    session.job_title_applying_for = profile.job_title_applying_for
+    session.key_jd_requirements = profile.key_jd_requirements
+    session.matched_skills = profile.matched_skills
+    session.skill_gaps = profile.skill_gaps
+    session.interview_focus_areas = profile.interview_focus_areas
+    session.resume_parsed = True
+    session.status = SessionStatus.ACTIVE
+    session.error_detail = None
+    session.updated_at = datetime.now(timezone.utc)
+
+
+def _build_state_from_profile(session_id: str, profile: CandidateProfile) -> UnifiedSessionState:
+    """Create the initial Redis state for a freshly analyzed session."""
+    return UnifiedSessionState(
+        session_id=session_id,
+        role=profile.job_title_applying_for,
+        level=profile.experience_level,
+        profile=profile.model_dump(),
+    )
+
+
+async def _mark_session_error(session_id: str, detail: str) -> None:
+    """Persist a session-level analysis failure so clients can surface it."""
+    try:
+        session = await InterviewSession.get(PydanticObjectId(session_id))
+    except Exception:
+        logger.error("unified.session_error_invalid_id", session_id=session_id, detail=detail)
+        return
+
+    if not session:
+        logger.error("unified.session_error_missing", session_id=session_id, detail=detail)
+        return
+
+    session.status = SessionStatus.ERROR
+    session.error_detail = detail
+    session.resume_parsed = False
+    session.updated_at = datetime.now(timezone.utc)
+    await session.save()
+
+
+async def _analyze_upload_in_background(
+    session_id: str,
+    file_bytes: bytes,
+    filename: str,
+    job_description: str,
+) -> None:
+    """
+    Continue resume parsing and AI analysis after the upload response returns.
+    """
+    logger.info("unified.upload_background_started", session_id=session_id, filename=filename)
+
+    try:
+        session = await InterviewSession.get(PydanticObjectId(session_id))
+    except Exception:
+        logger.exception("unified.upload_background_invalid_session_id", session_id=session_id)
+        return
+
+    if not session:
+        logger.error("unified.upload_background_session_missing", session_id=session_id)
+        return
+
+    try:
+        resume_text = await extract_text_from_file(file_bytes, filename)
+
+        if not resume_text.strip():
+            raise ValueError(
+                "Could not extract text from the resume. Please ensure it is a text-based PDF or DOCX (not an image or scan)."
+            )
+
+        profile: CandidateProfile = await _analyzer.analyze_resume(resume_text, job_description)
+
+        _apply_profile_to_session(session, profile)
+        await session.save()
+
+        state = _build_state_from_profile(session_id, profile)
+        await cache_session_state(session_id, state.model_dump())
+
+        logger.info(
+            "unified.upload_background_complete",
+            session_id=session_id,
+            candidate=profile.candidate_name,
+        )
+    except ValueError as e:
+        logger.error("unified.upload_background_analysis_failed", session_id=session_id, error=str(e))
+        await _mark_session_error(session_id, f"Analysis failed: {str(e)}")
+    except Exception:
+        logger.exception("unified.upload_background_error", session_id=session_id)
+        await _mark_session_error(
+            session_id,
+            "An unexpected error occurred while analyzing the resume. Please try the upload again.",
+        )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -105,6 +242,7 @@ async def _load_state(session_id: str) -> UnifiedSessionState:
 
 @router.post("/upload", response_model=UploadResponse, summary="Upload resume + JD")
 async def upload_resume(
+    background_tasks: BackgroundTasks,
     resume: UploadFile = File(..., description="Resume file (PDF or DOCX)"),
     job_description: str = Form(..., description="Full job description text"),
 ) -> UploadResponse:
@@ -124,66 +262,42 @@ async def upload_resume(
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
 
     try:
-        # 2. Extract text
         file_bytes = await resume.read()
-        resume_text = await extract_text_from_file(file_bytes, resume.filename or "resume.pdf")
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Resume file is empty.")
 
-        if not resume_text.strip():
-            logger.warning("unified.upload_empty_text", filename=resume.filename)
-            raise HTTPException(
-                status_code=400, 
-                detail="Could not extract text from the resume. Please ensure it is a text-based PDF or DOCX (not an image or scan)."
-            )
-
-        # 3. Analyze resume + JD
-        profile: CandidateProfile = await _analyzer.analyze_resume(resume_text, job_description)
-
-        # 4. Persist session to MongoDB
         session = InterviewSession(
-            role=profile.job_title_applying_for,
-            level=profile.experience_level,
-            target_skills=profile.technical_skills,
-            candidate_name=profile.candidate_name,
-            experience_level=profile.experience_level,
-            years_of_experience=profile.years_of_experience,
-            technical_skills=profile.technical_skills,
-            soft_skills=profile.soft_skills,
-            past_roles=profile.past_roles,
-            projects=profile.projects,
-            job_title_applying_for=profile.job_title_applying_for,
-            key_jd_requirements=profile.key_jd_requirements,
-            matched_skills=profile.matched_skills,
-            skill_gaps=profile.skill_gaps,
-            interview_focus_areas=profile.interview_focus_areas,
-            resume_parsed=True,
+            role="processing",
+            level="processing",
+            target_skills=["processing"],
+            status=SessionStatus.PROCESSING,
+            resume_parsed=False,
         )
         await session.insert()
         session_id = str(session.id)
 
-        # 5. Pre-warm Redis with minimal state (questions generated in /start)
-        state = UnifiedSessionState(
-            session_id=session_id,
-            role=profile.job_title_applying_for,
-            level=profile.experience_level,
-            profile=profile.model_dump(),
+        background_tasks.add_task(
+            _analyze_upload_in_background,
+            session_id,
+            file_bytes,
+            resume.filename or "resume.pdf",
+            job_description,
         )
-        await cache_session_state(session_id, state.model_dump())
 
-        logger.info("unified.upload_complete", session_id=session_id, candidate=profile.candidate_name)
+        logger.info("unified.upload_accepted", session_id=session_id, filename=resume.filename)
 
-        return UploadResponse(session_id=session_id, profile=profile)
+        return UploadResponse(
+            session_id=session_id,
+            status=SessionStatus.PROCESSING.value,
+            message="Upload received. Profile analysis is running in the background.",
+        )
 
     except HTTPException as e:
         # Re-raise known HTTP exceptions
         raise e
-    except ValueError as e:
-        # Known LLM parsing / validation errors
-        logger.error("unified.upload_analysis_failed", error=str(e))
-        raise HTTPException(status_code=422, detail=f"Analysis failed: {str(e)}")
     except Exception as e:
-        # Unexpected internal errors
         logger.exception("unified.upload_error")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during profile analysis.")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while accepting the upload.")
 
 
 # ── START ──────────────────────────────────────────────────────────────
@@ -200,7 +314,32 @@ async def start_interview(session_id: str) -> StartResponse:
     """
     logger.info("unified.start", session_id=session_id)
 
-    state = await _load_state(session_id)
+    try:
+        session = await InterviewSession.get(PydanticObjectId(session_id))
+    except Exception:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if session.status == SessionStatus.PROCESSING or not session.resume_parsed:
+        raise HTTPException(status_code=409, detail="Profile analysis is still in progress.")
+
+    if session.status == SessionStatus.ERROR:
+        raise HTTPException(
+            status_code=409,
+            detail=session.error_detail or "Profile analysis failed. Please upload the resume again.",
+        )
+
+    try:
+        state = await _load_state(session_id)
+    except HTTPException:
+        profile = _session_profile(session)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Session state is not ready yet.")
+
+        state = _build_state_from_profile(session_id, profile)
+        await cache_session_state(session_id, state.model_dump())
 
     if state.status != "active":
         raise HTTPException(status_code=409, detail="Session is not active.")
@@ -544,44 +683,76 @@ async def get_report(session_id: str) -> ReportPollResponse:
 @router.get("/{session_id}/status", response_model=SessionStatusResponse, summary="Check session status")
 async def check_session_status(session_id: str) -> SessionStatusResponse:
     """Check if session is alive in Redis and return current progress."""
+    try:
+        session = await InterviewSession.get(PydanticObjectId(session_id))
+    except Exception:
+        session = None
+
+    if not session:
+        return SessionStatusResponse(
+            session_id=session_id,
+            status="expired",
+            current_step="upload",
+            question_number=0,
+            detail="Session not found.",
+        )
+
+    profile = _session_profile(session)
+
+    if session.status == SessionStatus.PROCESSING or not session.resume_parsed:
+        return SessionStatusResponse(
+            session_id=session_id,
+            status=SessionStatus.PROCESSING.value,
+            current_step="upload",
+            question_number=0,
+            profile=None,
+            detail="Profile analysis is still running.",
+        )
+
+    if session.status == SessionStatus.ERROR:
+        return SessionStatusResponse(
+            session_id=session_id,
+            status=SessionStatus.ERROR.value,
+            current_step="upload",
+            question_number=0,
+            profile=None,
+            detail=session.error_detail or "Profile analysis failed.",
+        )
+
     state_dict = await get_session_state(session_id)
-    
-    # If not in Redis, check DB
-    if not state_dict:
-        try:
-            session = await InterviewSession.get(PydanticObjectId(session_id))
-            if not session:
-                return SessionStatusResponse(
-                    session_id=session_id, status="expired", current_step="upload", question_number=0
-                )
-            
-            # Map DB status to simplified step
-            step = "upload"
-            if session.resume_parsed and not session.conversation_history:
-                step = "profile"
-            elif session.conversation_history and session.status != SessionStatus.COMPLETED:
-                step = "interview"
-            elif session.status == SessionStatus.COMPLETED:
-                step = "report"
 
-            return SessionStatusResponse(
-                session_id=session_id,
-                status="active" if session.status != SessionStatus.COMPLETED else "completed",
-                current_step=step,
-                question_number=session.current_skill_index or 0
-            )
-        except Exception:
-            return SessionStatusResponse(
-                session_id=session_id, status="expired", current_step="upload", question_number=0
-            )
+    if state_dict:
+        state = UnifiedSessionState(**state_dict)
+        current_step = "profile"
+        question_number = 0
 
-    state = UnifiedSessionState(**state_dict)
+        if state.questions:
+            current_step = "interview" if state.status == "active" else "report"
+            question_number = state.current_question_index + 1
+
+        return SessionStatusResponse(
+            session_id=session_id,
+            status=state.status,
+            current_step=current_step,
+            question_number=question_number,
+            total_questions=TOTAL_QUESTIONS,
+            profile=profile,
+        )
+
+    step = "profile"
+    if session.conversation_history and session.status != SessionStatus.COMPLETED:
+        step = "interview"
+    elif session.status == SessionStatus.COMPLETED:
+        step = "report"
+
     return SessionStatusResponse(
         session_id=session_id,
-        status=state.status,
-        current_step="interview" if state.status == "active" else "report",
-        question_number=state.current_question_index + 1,
-        total_questions=TOTAL_QUESTIONS
+        status="active" if session.status != SessionStatus.COMPLETED else "completed",
+        current_step=step,
+        question_number=session.current_skill_index or 0,
+        total_questions=TOTAL_QUESTIONS,
+        profile=profile,
+        detail=session.error_detail,
     )
 
 

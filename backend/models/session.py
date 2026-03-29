@@ -16,6 +16,7 @@ from pydantic import Field
 
 class SessionStatus(str, Enum):
     """Lifecycle states of an interview session."""
+    PROCESSING = "processing"
     ACTIVE = "active"
     COMPLETED = "completed"
     ERROR = "error"
@@ -74,6 +75,10 @@ class InterviewSession(Document):
     report_data: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Structured final report payload for client-side results rendering",
+    )
+    error_detail: Optional[str] = Field(
+        default=None,
+        description="Human-readable failure detail when the session enters an error state.",
     )
     
     # -- Resume / Smart Interview fields --

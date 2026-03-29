@@ -4,12 +4,15 @@ import type {
   StartResponse, 
   TurnResponse, 
   FinalReport, 
-  ReportPollResponse 
+  ReportPollResponse,
+  SessionStatusResponse,
 } from '../types/api';
 
 const REQUEST_RETRY_DELAY_MS = 1500;
-const UPLOAD_TIMEOUT_MS = 300000;
+const UPLOAD_TIMEOUT_MS = 120000;
 const START_TIMEOUT_MS = 240000;
+const UPLOAD_STATUS_POLL_MS = 2500;
+const UPLOAD_STATUS_MAX_POLLS = 120;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -52,6 +55,41 @@ export const interviewService = {
       });
       return response.data;
     });
+  },
+
+  getSessionStatus: async (sessionId: string): Promise<SessionStatusResponse> => {
+    const response = await api.get<SessionStatusResponse>(`/interview/${sessionId}/status`);
+    return response.data;
+  },
+
+  waitForUploadReady: async (sessionId: string): Promise<SessionStatusResponse> => {
+    for (let attempt = 0; attempt < UPLOAD_STATUS_MAX_POLLS; attempt += 1) {
+      try {
+        await ensureBackendReady(attempt > 0);
+
+        const status = await interviewService.getSessionStatus(sessionId);
+
+        if ((status.status === 'active' || status.status === 'completed') && status.profile) {
+          return status;
+        }
+
+        if (status.status === 'error') {
+          throw new Error(status.detail || 'Profile analysis failed. Please upload the resume again.');
+        }
+
+        if (status.status === 'expired') {
+          throw new Error('The upload session expired before analysis completed. Please upload again.');
+        }
+      } catch (error) {
+        if (!isRecoverableNetworkError(error)) {
+          throw error;
+        }
+      }
+
+      await sleep(UPLOAD_STATUS_POLL_MS);
+    }
+
+    throw new Error('Profile analysis is taking longer than expected. Please keep the page open and try again shortly.');
   },
 
   start: async (sessionId: string): Promise<StartResponse> => {

@@ -16,6 +16,8 @@ export const Upload: React.FC = () => {
   const [isRetryingBackend, setIsRetryingBackend] = useState(false);
   const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [uploadOverlayTitle, setUploadOverlayTitle] = useState('Analyzing Profile');
+  const [uploadOverlayMessage, setUploadOverlayMessage] = useState('Extracting skills from DNA... please wait.');
   const navigate = useNavigate();
   const setSession = useInterviewStore((state: any) => state.setSession);
 
@@ -74,9 +76,28 @@ export const Upload: React.FC = () => {
     setIsUploading(true);
     setBackendWakeError(null);
     setSubmissionError(null);
+    setUploadOverlayTitle('Uploading Resume');
+    setUploadOverlayMessage('Sending your resume and job description to PrepX...');
     try {
       const data = await interviewService.upload(resume, jd);
-      setSession(data.session_id, data.profile);
+
+      setUploadOverlayTitle('Analyzing Profile');
+      setUploadOverlayMessage('Upload complete. We are parsing your resume and generating your interview profile in the background.');
+
+      const readyStatus = data.profile
+        ? {
+            session_id: data.session_id,
+            profile: data.profile,
+          }
+        : await interviewService.waitForUploadReady(data.session_id);
+
+      if (!readyStatus.profile) {
+        throw new Error('Your upload finished, but the profile was not ready yet. Please try again.');
+      }
+
+      setUploadOverlayTitle('Profile Ready');
+      setUploadOverlayMessage('Opening your personalized interview profile...');
+      setSession(readyStatus.session_id, readyStatus.profile);
       navigate('/profile');
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -97,6 +118,8 @@ export const Upload: React.FC = () => {
       setSubmissionError(errorMessage);
     } finally {
       setIsUploading(false);
+      setUploadOverlayTitle('Analyzing Profile');
+      setUploadOverlayMessage('Extracting skills from DNA... please wait.');
     }
   };
 
@@ -265,8 +288,8 @@ export const Upload: React.FC = () => {
                   <span className="text-neon-cyan font-black text-2xl italic">P</span>
                </div>
             </div>
-            <h2 className="text-2xl font-bold text-glow mb-2">Analyzing Profile</h2>
-            <p className="text-gray-400">Extracting skills from DNA... please wait.</p>
+            <h2 className="text-2xl font-bold text-glow mb-2">{uploadOverlayTitle}</h2>
+            <p className="text-gray-400 max-w-md text-center px-6">{uploadOverlayMessage}</p>
           </motion.div>
         )}
       </AnimatePresence>

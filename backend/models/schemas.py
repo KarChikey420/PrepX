@@ -37,10 +37,11 @@ class CandidateProfile(BaseModel):
 
 
 class UploadResponse(BaseModel):
-    """Returned after successful resume + JD upload and profile analysis."""
+    """Returned after the resume + JD upload has been accepted for analysis."""
     session_id: str
-    profile: CandidateProfile
-    message: str = "Profile analyzed. Call /start to begin the interview."
+    status: str = "processing"              # processing | active | error
+    profile: Optional[CandidateProfile] = None
+    message: str = "Profile analysis started. Poll session status until the profile is ready."
 
 
 # ── Question ───────────────────────────────────────────────────────────
@@ -172,7 +173,9 @@ class HealthResponse(BaseModel):
 class SessionStatusResponse(BaseModel):
     """GET /interview/{session_id}/status"""
     session_id: str
-    status: str                              # active | completed | expired
+    status: str                              # processing | active | completed | error | expired
     current_step: str                        # upload | profile | interview | report
     question_number: int
     total_questions: int = 10
+    profile: Optional[CandidateProfile] = None
+    detail: Optional[str] = None

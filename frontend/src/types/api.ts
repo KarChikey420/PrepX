@@ -15,7 +15,8 @@ export interface CandidateProfile {
 
 export interface UploadResponse {
   session_id: string;
-  profile: CandidateProfile;
+  status: 'processing' | 'active' | 'error';
+  profile: CandidateProfile | null;
   message: string;
 }
 
@@ -65,8 +66,10 @@ export interface ReportPollResponse {
 
 export interface SessionStatusResponse {
   session_id: string;
-  status: 'active' | 'completed' | 'expired';
+  status: 'processing' | 'active' | 'completed' | 'error' | 'expired';
   current_step: 'upload' | 'profile' | 'interview' | 'report';
   question_number: number;
   total_questions: number;
+  profile: CandidateProfile | null;
+  detail: string | null;
 }
