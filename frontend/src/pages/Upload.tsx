@@ -31,7 +31,18 @@ export const Upload: React.FC = () => {
       navigate('/profile');
     } catch (error: any) {
       console.error('Upload failed:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to analyze profile. Please try again.';
+      const detail = error.response?.data?.detail;
+      let errorMessage = 'Failed to analyze profile. Please try again.';
+      
+      if (typeof detail === 'string') {
+        errorMessage = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI validation errors return an array of objects
+        errorMessage = detail.map((d: any) => d.msg || d).join('\n');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       alert(errorMessage);
     } finally {
       setIsUploading(false);
