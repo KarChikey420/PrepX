@@ -121,13 +121,18 @@ async def auth_callback(request: Request) -> RedirectResponse:
         return RedirectResponse(url=response_url)
 
     except OAuthError as e:
-        logger.error(
-            "auth.callback_oauth_error",
-            error=e.error,
-            description=e.description,
-        )
+        if e.error == "mismatching_state":
+            logger.debug("auth.callback_state_mismatch")
+            detail = "session_expired"
+        else:
+            logger.warning(
+                "auth.callback_oauth_error",
+                error=e.error,
+                description=e.description,
+            )
+            detail = e.error or "oauth_error"
         return RedirectResponse(
-            url=_frontend_redirect("/auth/error", detail=e.error or "oauth_error")
+            url=_frontend_redirect("/auth/error", detail=detail)
         )
     except Exception as e:
         logger.error("auth.callback_failed", error=str(e))
