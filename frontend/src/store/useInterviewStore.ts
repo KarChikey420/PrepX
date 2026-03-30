@@ -1,13 +1,8 @@
 import { create } from 'zustand';
 import type { CandidateProfile, TurnResponse, FinalReport } from '../types/api';
+import { API_BASE_URL } from '../services/apiConfig';
 
 export type InterviewFlowStage = 'upload' | 'profile' | 'interview' | 'report';
-
-const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
-const BROWSER_ORIGIN = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
-const API_BASE_URL = import.meta.env.DEV
-  ? REMOTE_API_BASE_URL
-  : new URL('/api/v1', BROWSER_ORIGIN).toString();
 
 const readStoredJson = <T>(key: string): T | null => {
   try {

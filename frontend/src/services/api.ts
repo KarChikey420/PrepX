@@ -1,11 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
-
-const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
-
-// Important: Direct connection to Render to bypass Vercel's proxy file-upload drops on mobile.
-const API_BASE_URL = REMOTE_API_BASE_URL;
-const BACKEND_ORIGIN = new URL(API_BASE_URL, typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin).origin;
+import { API_BASE_URL, BACKEND_ORIGIN } from './apiConfig';
 
 // 60-second timeout ensures mobile browser holds socket open during Render's cold start
 const BACKEND_WAKE_TIMEOUT_MS = 60000;

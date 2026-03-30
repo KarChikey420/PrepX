@@ -8,6 +8,39 @@ import { NeonButton } from '../components/ui/NeonButton';
 import { interviewService } from '../services/interviewService';
 import { useInterviewStore } from '../store/useInterviewStore';
 
+const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024;
+const SUPPORTED_RESUME_EXTENSIONS = new Set(['pdf', 'docx']);
+
+const getResumeExtension = (filename: string) =>
+  filename.split('.').pop()?.toLowerCase() ?? '';
+
+const validateResumeFile = async (file: File): Promise<string | null> => {
+  const extension = getResumeExtension(file.name);
+
+  if (!SUPPORTED_RESUME_EXTENSIONS.has(extension)) {
+    return 'Please upload your resume as a PDF or DOCX file.';
+  }
+
+  if (file.size === 0) {
+    return 'The selected file appears to be empty or inaccessible from cloud storage. Please download it to your device first.';
+  }
+
+  if (file.size > MAX_RESUME_SIZE_BYTES) {
+    return 'Please upload a resume smaller than 5MB. Mobile browsers often drop larger uploads before they finish.';
+  }
+
+  try {
+    const chunk = await file.slice(0, Math.min(file.size, 64)).arrayBuffer();
+    if (chunk.byteLength === 0) {
+      return 'This file could not be read from your device storage. Please re-save it locally and try again.';
+    }
+  } catch {
+    return 'This file could not be read from your device storage. Please re-save it locally and try again.';
+  }
+
+  return null;
+};
+
 export const Upload: React.FC = () => {
   const [resume, setResume] = useState<File | null>(null);
   const [jd, setJd] = useState('');
@@ -45,11 +78,24 @@ export const Upload: React.FC = () => {
     };
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setResume(e.target.files[0]);
-      setSubmissionError(null);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedResume = e.target.files?.[0] ?? null;
+
+    if (!selectedResume) {
+      setResume(null);
+      return;
     }
+
+    const validationError = await validateResumeFile(selectedResume);
+    if (validationError) {
+      setResume(null);
+      setSubmissionError(validationError);
+      e.target.value = '';
+      return;
+    }
+
+    setResume(selectedResume);
+    setSubmissionError(null);
   };
 
   const handleWakeBackendAgain = async () => {
@@ -71,21 +117,20 @@ export const Upload: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resume || !jd) return;
+    if (!resume || !jd.trim()) return;
+
+    const validationError = await validateResumeFile(resume);
+    if (validationError) {
+      setSubmissionError(validationError);
+      return;
+    }
 
     setIsUploading(true);
     setBackendWakeError(null);
     setSubmissionError(null);
     setUploadOverlayTitle('Uploading Resume');
     setUploadOverlayMessage('Sending your resume and job description to PrepX...');
-    
-    // Validate file to prevent iOS/iCloud ghost file Network Errors
-    if (resume.size === 0) {
-      setIsUploading(false);
-      setSubmissionError('The selected file appears to be empty or inaccessible from cloud storage. Please download it to your device first.');
-      return;
-    }
-    
+
     try {
       const data = await interviewService.upload(resume, jd);
 
@@ -212,10 +257,10 @@ export const Upload: React.FC = () => {
         </div>
 
         <div className="flex justify-center pt-8">
-          <NeonButton 
+          <NeonButton
             size="lg" 
             isLoading={isUploading} 
-            disabled={!resume || !jd || (isPreparingBackend && !backendWakeError)}
+            disabled={!resume || !jd.trim() || (isPreparingBackend && !backendWakeError)}
             className="w-full max-w-sm"
           >
             {isUploading

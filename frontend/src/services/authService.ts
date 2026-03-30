@@ -1,6 +1,6 @@
 import axios from 'axios';
+import { API_BASE_URL } from './apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
 const BACKEND_WAKE_TIMEOUT_MS = 10000;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
 const BACKEND_WAKE_MAX_ATTEMPTS = 8;

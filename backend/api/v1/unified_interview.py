@@ -60,6 +60,11 @@ _mentor = MentorAgent()
 TOTAL_QUESTIONS = 10
 
 
+def _audio_url_for_turn(session_id: str, turn_index: int) -> str:
+    """Build the stable relative URL for a synthesized turn audio asset."""
+    return f"/api/v1/interview/{session_id}/audio/{turn_index}"
+
+
 def _session_profile(session: InterviewSession) -> CandidateProfile | None:
     """Build a candidate profile from a persisted session when analysis is complete."""
     if (
@@ -206,7 +211,7 @@ async def _synthesize_and_store(session_id: str, turn_index: int, text: str) -> 
         audio_bytes = await synthesize_full(text)
         if audio_bytes:
             await store_audio_bytes(session_id, turn_index, audio_bytes)
-            return f"/api/v1/interview/{session_id}/audio/{turn_index}"
+            return _audio_url_for_turn(session_id, turn_index)
     except Exception as e:
         logger.error(
             "unified.tts_failed",
@@ -216,6 +221,17 @@ async def _synthesize_and_store(session_id: str, turn_index: int, text: str) -> 
             exc_info=True,
         )
     return None
+
+
+async def _ensure_question_audio(session_id: str, turn_index: int, text: str) -> str | None:
+    """Reuse cached audio when possible so retried starts stay lightweight."""
+    if not text:
+        return None
+
+    if await get_audio_bytes(session_id, turn_index):
+        return _audio_url_for_turn(session_id, turn_index)
+
+    return await _synthesize_and_store(session_id, turn_index, text)
 
 
 async def _synthesize_safe(text: str) -> str | None:
@@ -235,6 +251,27 @@ async def _load_state(session_id: str) -> UnifiedSessionState:
     if cached is None:
         raise HTTPException(status_code=404, detail="Session not found or expired.")
     return UnifiedSessionState(**cached)
+
+
+async def _build_start_response_from_state(session_id: str, state: UnifiedSessionState) -> StartResponse:
+    """Return the current question so /start can be safely retried or resumed."""
+    if not state.questions:
+        raise HTTPException(status_code=409, detail="Interview questions are not ready yet.")
+
+    current_index = min(max(state.current_question_index, 0), len(state.questions) - 1)
+    current_question = state.questions[current_index]
+    question_text = state.last_question or current_question.get("question", "")
+    audio_url = await _ensure_question_audio(session_id, current_index, question_text)
+
+    return StartResponse(
+        session_id=session_id,
+        question_text=question_text,
+        audio_url=audio_url,
+        question_number=current_index + 1,
+        total_questions=TOTAL_QUESTIONS,
+        focus_area=current_question.get("focus_area", ""),
+        question_type=current_question.get("type", ""),
+    )
 
 
 # ── UPLOAD ─────────────────────────────────────────────────────────────
@@ -345,7 +382,12 @@ async def start_interview(session_id: str) -> StartResponse:
         raise HTTPException(status_code=409, detail="Session is not active.")
 
     if state.questions:
-        raise HTTPException(status_code=409, detail="Interview already started. Use /turn.")
+        logger.info(
+            "unified.start_resumed",
+            session_id=session_id,
+            question_index=state.current_question_index,
+        )
+        return await _build_start_response_from_state(session_id, state)
 
     # 1. Generate 10 questions
     profile = CandidateProfile(**state.profile)
@@ -365,7 +407,7 @@ async def start_interview(session_id: str) -> StartResponse:
     first_q = questions_dicts[0]
 
     # 3. TTS audio (Optimized: Binary)
-    audio_url = await _synthesize_and_store(session_id, 0, question_text)
+    audio_url = await _ensure_question_audio(session_id, 0, question_text)
 
     # 4. Update Redis state
     state.questions = questions_dicts

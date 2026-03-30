@@ -89,7 +89,11 @@ export const Interview: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to start interview:', err);
-      if (isRecoverableNetworkError(err)) {
+      const detail = (err as any)?.response?.data?.detail;
+
+      if (typeof detail === 'string' && detail.trim()) {
+        setInitializationError(detail);
+      } else if (isRecoverableNetworkError(err)) {
         setInitializationError('The interview service is still waking up or your connection dropped for a moment. Tap retry to continue.');
       } else {
         setInitializationError('We could not start the interview right now. Please try again.');

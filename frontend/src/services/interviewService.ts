@@ -48,7 +48,7 @@ export const interviewService = {
     return withBackendRecovery(async () => {
       const formData = new FormData();
       formData.append('resume', resume);
-      formData.append('job_description', jobDescription);
+      formData.append('job_description', jobDescription.trim());
 
       const response = await api.post<UploadResponse>('/interview/upload', formData, {
         timeout: UPLOAD_TIMEOUT_MS,
@@ -94,7 +94,7 @@ export const interviewService = {
 
   start: async (sessionId: string): Promise<StartResponse> => {
     return withBackendRecovery(async () => {
-      const response = await api.post<StartResponse>(`/interview/${sessionId}/start`, undefined, {
+      const response = await api.post<StartResponse>(`/interview/${sessionId}/start`, null, {
         timeout: START_TIMEOUT_MS,
       });
       return response.data;
