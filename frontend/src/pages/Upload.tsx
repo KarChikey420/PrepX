@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { ensureBackendReady, isRecoverableNetworkError } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, FileText, CheckCircle2 } from 'lucide-react';
@@ -49,6 +50,7 @@ export const Upload: React.FC = () => {
   const [isRetryingBackend, setIsRetryingBackend] = useState(false);
   const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [showWakeActions, setShowWakeActions] = useState(false);
   const [uploadOverlayTitle, setUploadOverlayTitle] = useState('Analyzing Profile');
   const [uploadOverlayMessage, setUploadOverlayMessage] = useState('Extracting skills from DNA... please wait.');
   const navigate = useNavigate();
@@ -90,12 +92,14 @@ export const Upload: React.FC = () => {
     if (validationError) {
       setResume(null);
       setSubmissionError(validationError);
+      setShowWakeActions(false);
       e.target.value = '';
       return;
     }
 
     setResume(selectedResume);
     setSubmissionError(null);
+    setShowWakeActions(false);
   };
 
   const handleWakeBackendAgain = async () => {
@@ -103,6 +107,7 @@ export const Upload: React.FC = () => {
     setIsPreparingBackend(true);
     setBackendWakeError(null);
     setSubmissionError(null);
+    setShowWakeActions(false);
 
     try {
       await ensureBackendReady(true);
@@ -128,6 +133,7 @@ export const Upload: React.FC = () => {
     setIsUploading(true);
     setBackendWakeError(null);
     setSubmissionError(null);
+    setShowWakeActions(false);
     setUploadOverlayTitle('Uploading Resume');
     setUploadOverlayMessage('Sending your resume and job description. (This may take up to a minute if the mobile network is slow)');
 
@@ -152,25 +158,32 @@ export const Upload: React.FC = () => {
       setUploadOverlayMessage('Opening your personalized interview profile...');
       setSession(readyStatus.session_id, readyStatus.profile);
       navigate('/profile');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Upload failed:', error);
-      const detail = error.response?.data?.detail;
+      const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
+      const isRecoverable = isRecoverableNetworkError(error);
       let errorMessage = 'Failed to analyze profile. Please try again.';
       
       if (typeof detail === 'string') {
         errorMessage = detail;
       } else if (Array.isArray(detail)) {
         // FastAPI validation errors return an array of objects
-        errorMessage = detail.map((d: any) => d.msg || d).join('\n');
-      } else if (isRecoverableNetworkError(error)) {
-        errorMessage = 'Network Error: The AI service might still be waking up or your mobile connection may have dropped. We are attempting to wake it again now. Please try again soon.';
-        // Automatically trigger backend wake so the next try is more likely to succeed
-        void handleWakeBackendAgain();
-      } else if (error.message) {
+        errorMessage = detail.map((d: { msg?: string } | string) =>
+          typeof d === 'string' ? d : d.msg || 'Invalid request.'
+        ).join('\n');
+      } else if (isRecoverable) {
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        errorMessage = isOffline
+          ? 'Your device appears to be offline. Reconnect to the internet, then try the upload again.'
+          : 'The interview service is temporarily unreachable. This is usually a brief mobile network drop or a Render cold start. Wait 10 to 15 seconds, then try again.';
+      } else if (axios.isAxiosError(error) && error.response?.status) {
+        errorMessage = `The interview service returned ${error.response.status}. Please try again in a moment.`;
+      } else if (error instanceof Error && error.message) {
         errorMessage = error.message;
       }
       
       setSubmissionError(errorMessage);
+      setShowWakeActions(isRecoverable);
     } finally {
       setIsUploading(false);
       setUploadOverlayTitle('Analyzing Profile');
@@ -252,6 +265,7 @@ export const Upload: React.FC = () => {
               onChange={(e) => {
                 setJd(e.target.value);
                 setSubmissionError(null);
+                setShowWakeActions(false);
               }}
               required
             />
@@ -290,31 +304,35 @@ export const Upload: React.FC = () => {
             <p className="text-center text-sm md:text-base font-medium">
               {submissionError}
             </p>
-            <div className="mt-4 space-y-2 text-sm text-rose-100/90">
-              <p>What to do:</p>
-              <p>1. Keep this page open for 10 to 15 seconds so the Render backend can wake up fully.</p>
-              <p>2. Tap `Wake Service Again`, then tap `Start AI Interview` once more.</p>
-              <p>3. If mobile data is unstable, switch to Wi-Fi and try the same resume again.</p>
-            </div>
-            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
-              <NeonButton
-                type="button"
-                onClick={() => void handleWakeBackendAgain()}
-                size="md"
-                isLoading={isRetryingBackend}
-                className="w-full sm:w-auto"
-              >
-                {isRetryingBackend ? 'Waking Service...' : 'Wake Service Again'}
-              </NeonButton>
-              <NeonButton
-                type="submit"
-                size="md"
-                variant="outline"
-                className="w-full sm:w-auto"
-              >
-                Try Upload Again
-              </NeonButton>
-            </div>
+            {showWakeActions && (
+              <>
+                <div className="mt-4 space-y-2 text-sm text-rose-100/90">
+                  <p>What to do:</p>
+                  <p>1. Keep this page open for 10 to 15 seconds so the Render backend can wake up fully.</p>
+                  <p>2. Tap `Wake Service Again`, then tap `Start AI Interview` once more.</p>
+                  <p>3. If mobile data is unstable, switch to Wi-Fi and try the same resume again.</p>
+                </div>
+                <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+                  <NeonButton
+                    type="button"
+                    onClick={() => void handleWakeBackendAgain()}
+                    size="md"
+                    isLoading={isRetryingBackend}
+                    className="w-full sm:w-auto"
+                  >
+                    {isRetryingBackend ? 'Waking Service...' : 'Wake Service Again'}
+                  </NeonButton>
+                  <NeonButton
+                    type="submit"
+                    size="md"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
+                    Try Upload Again
+                  </NeonButton>
+                </div>
+              </>
+            )}
           </div>
         )}
       </form>

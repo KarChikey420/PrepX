@@ -11,8 +11,8 @@ import type {
 const REQUEST_RETRY_DELAY_MS = 1500;
 const UPLOAD_TIMEOUT_MS = 180000;
 const START_TIMEOUT_MS = 240000;
-const UPLOAD_STATUS_POLL_MS = 2500;
-const UPLOAD_STATUS_MAX_POLLS = 120;
+const UPLOAD_STATUS_POLL_MS = 4000;
+const UPLOAD_STATUS_MAX_POLLS = 75;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -64,9 +64,14 @@ export const interviewService = {
   },
 
   waitForUploadReady: async (sessionId: string): Promise<SessionStatusResponse> => {
+    let shouldForceBackendWake = false;
+
     for (let attempt = 0; attempt < UPLOAD_STATUS_MAX_POLLS; attempt += 1) {
       try {
-        await ensureBackendReady(attempt > 0);
+        // Only force a wake-up after an actual recoverable failure.
+        // Re-warming on every poll adds unnecessary load on Render.
+        await ensureBackendReady(shouldForceBackendWake);
+        shouldForceBackendWake = false;
 
         const status = await interviewService.getSessionStatus(sessionId);
 
@@ -85,6 +90,8 @@ export const interviewService = {
         if (!isRecoverableNetworkError(error)) {
           throw error;
         }
+
+        shouldForceBackendWake = true;
       }
 
       await sleep(UPLOAD_STATUS_POLL_MS);

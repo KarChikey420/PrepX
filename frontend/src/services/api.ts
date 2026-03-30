@@ -62,17 +62,18 @@ export const isRecoverableNetworkError = (error: unknown) => {
     return false;
   }
 
-  if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || error.code === 'ERR_BAD_RESPONSE') {
-    return true;
-  }
-
-  // Vercel returns HTTP 504 and 502 when Render is still asleep or booting.
-  // 503 can also happen during initial booting sequence.
   if (error.response && [502, 503, 504].includes(error.response.status)) {
     return true;
   }
 
-  return error.message === 'Network Error' || error.message?.toLowerCase().includes('timeout') === true;
+  if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
+    return true;
+  }
+
+  return !error.response && (
+    error.message === 'Network Error' ||
+    error.message?.toLowerCase().includes('timeout') === true
+  );
 };
 
 const api = axios.create({
