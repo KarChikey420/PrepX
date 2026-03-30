@@ -122,7 +122,6 @@ async def auth_callback(request: Request) -> RedirectResponse:
 
     except OAuthError as e:
         if e.error == "mismatching_state":
-            logger.debug("auth.callback_state_mismatch")
             detail = "session_expired"
         else:
             logger.warning(

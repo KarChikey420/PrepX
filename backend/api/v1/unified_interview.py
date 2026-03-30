@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
 import structlog
 
 from core.redis import get_redis, cache_session_state, get_session_state, update_session_state
@@ -279,6 +279,7 @@ async def _build_start_response_from_state(session_id: str, state: UnifiedSessio
 
 @router.post("/upload", response_model=UploadResponse, summary="Upload resume + JD")
 async def upload_resume(
+    request: Request,
     background_tasks: BackgroundTasks,
     resume: UploadFile = File(..., description="Resume file (PDF or DOCX)"),
     job_description: str = Form(..., description="Full job description text"),
@@ -292,15 +293,29 @@ async def upload_resume(
     - Pre-warms Redis state.
     - Returns session_id + structured CandidateProfile.
     """
-    logger.info("unified.upload_started", filename=resume.filename)
+    logger.info(
+        "unified.upload_started",
+        filename=resume.filename,
+        content_type=resume.content_type,
+        job_description_length=len(job_description.strip()),
+        client_host=request.client.host if request.client else None,
+    )
 
     # 1. Basic Validation
     if not job_description.strip():
+        logger.warning("unified.upload_invalid_job_description", filename=resume.filename)
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
 
     try:
         file_bytes = await resume.read()
+        logger.info(
+            "unified.upload_file_read",
+            filename=resume.filename,
+            bytes_read=len(file_bytes),
+            content_type=resume.content_type,
+        )
         if not file_bytes:
+            logger.warning("unified.upload_empty_file", filename=resume.filename)
             raise HTTPException(status_code=400, detail="Resume file is empty.")
 
         session = InterviewSession(
@@ -312,6 +327,7 @@ async def upload_resume(
         )
         await session.insert()
         session_id = str(session.id)
+        logger.info("unified.upload_session_created", session_id=session_id, filename=resume.filename)
 
         background_tasks.add_task(
             _analyze_upload_in_background,
@@ -330,10 +346,15 @@ async def upload_resume(
         )
 
     except HTTPException as e:
-        # Re-raise known HTTP exceptions
+        logger.warning(
+            "unified.upload_http_error",
+            filename=resume.filename,
+            status_code=e.status_code,
+            detail=e.detail,
+        )
         raise e
-    except Exception as e:
-        logger.exception("unified.upload_error")
+    except Exception:
+        logger.exception("unified.upload_error", filename=resume.filename)
         raise HTTPException(status_code=500, detail="An unexpected error occurred while accepting the upload.")
 
 
