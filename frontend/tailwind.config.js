@@ -16,6 +16,12 @@ export default {
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'shimmer': 'shimmer 2s infinite linear',
+      },
+      keyframes: {
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
+        }
       },
       boxShadow: {
         'neon-glow': '0 0 15px rgba(0, 245, 255, 0.5)',

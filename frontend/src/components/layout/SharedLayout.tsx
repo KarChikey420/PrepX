@@ -151,16 +151,6 @@ export const SharedLayout: React.FC = () => {
         </nav>
 
         <div className="p-6 mt-auto border-t border-white/5 space-y-3">
-          <motion.button
-            whileHover={{ scale: 1.02, backgroundColor: 'rgba(0, 255, 255, 0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleNewSession}
-            className="flex items-center gap-4 px-4 py-3 rounded-xl text-neon-cyan transition-all duration-300 w-full group border border-neon-cyan/20 shadow-[0_0_15px_rgba(0,255,255,0.05)] hover:shadow-[0_0_20px_rgba(0,255,255,0.15)] relative overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/0 via-neon-cyan/5 to-neon-cyan/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-            <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500 relative z-10" />
-            <span className="font-semibold tracking-wide relative z-10 text-glow">New Session</span>
-          </motion.button>
           <button 
             onClick={handleLogout}
             className="flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-red-400 transition-colors w-full group"
@@ -186,13 +176,21 @@ export const SharedLayout: React.FC = () => {
               {resolvedNavItems.find(item => item.path === location.pathname)?.label || 'Upload'}
             </h1>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="p-2 rounded-full hover:bg-white/5 text-gray-400 relative">
-              <div className="absolute top-2 right-2 w-2 h-2 bg-neon-cyan rounded-full border-2 border-slate-900" />
-              <User className="w-6 h-6" />
-            </div>
-          </div>
         </header>
+
+        {/* Global Action Bar */}
+        <div className="px-4 md:px-8 py-3 border-b border-white/5 bg-slate-900/20 backdrop-blur-sm flex items-center justify-end">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleNewSession}
+            className="flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold text-neon-cyan border border-neon-cyan/30 bg-neon-cyan/5 hover:bg-neon-cyan/10 transition-all duration-300 shadow-[0_0_15px_rgba(0,255,255,0.1)] hover:shadow-[0_0_25px_rgba(0,255,255,0.2)] group relative overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer" />
+            <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+            <span className="tracking-wide">New Session</span>
+          </motion.button>
+        </div>
 
         {/* Content Area */}
         <div className="p-4 md:p-8">
