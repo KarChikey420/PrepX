@@ -9,7 +9,7 @@ import type {
 } from '../types/api';
 
 const REQUEST_RETRY_DELAY_MS = 1500;
-const UPLOAD_TIMEOUT_MS = 120000;
+const UPLOAD_TIMEOUT_MS = 180000;
 const START_TIMEOUT_MS = 240000;
 const UPLOAD_STATUS_POLL_MS = 2500;
 const UPLOAD_STATUS_MAX_POLLS = 120;
@@ -36,7 +36,8 @@ const withBackendRecovery = async <T>(
         throw error;
       }
 
-      await sleep(REQUEST_RETRY_DELAY_MS * (attempt + 1));
+      const backoffDelay = REQUEST_RETRY_DELAY_MS * Math.pow(2, attempt);
+      await sleep(backoffDelay);
     }
   }
 

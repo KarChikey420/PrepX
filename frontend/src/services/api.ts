@@ -2,11 +2,12 @@ import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { API_BASE_URL, BACKEND_ORIGIN } from './apiConfig';
 
-// 60-second timeout ensures mobile browser holds socket open during Render's cold start
-const BACKEND_WAKE_TIMEOUT_MS = 60000;
+// 120-second timeout ensures mobile browser holds socket open during Render's cold start
+const BACKEND_WAKE_TIMEOUT_MS = 120000;
 const BACKEND_WAKE_RETRY_DELAY_MS = 2500;
 const BACKEND_WAKE_MAX_ATTEMPTS = 3;
 const BACKEND_READY_CACHE_MS = 10 * 60 * 1000;
+const BACKEND_GRACE_PERIOD_MS = 2000;
 
 let backendReadyUntil = 0;
 let backendWakePromise: Promise<void> | null = null;
@@ -27,6 +28,7 @@ const warmBackend = async () => {
       await axios.get(buildBackendUrl(`health?warmup=${Date.now()}`), {
         timeout: BACKEND_WAKE_TIMEOUT_MS,
       });
+      await sleep(BACKEND_GRACE_PERIOD_MS);
       backendReadyUntil = Date.now() + BACKEND_READY_CACHE_MS;
       return;
     } catch (error) {
@@ -65,7 +67,8 @@ export const isRecoverableNetworkError = (error: unknown) => {
   }
 
   // Vercel returns HTTP 504 and 502 when Render is still asleep or booting.
-  if (error.response && (error.response.status === 504 || error.response.status === 502)) {
+  // 503 can also happen during initial booting sequence.
+  if (error.response && [502, 503, 504].includes(error.response.status)) {
     return true;
   }
 

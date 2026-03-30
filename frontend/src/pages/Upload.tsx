@@ -129,7 +129,7 @@ export const Upload: React.FC = () => {
     setBackendWakeError(null);
     setSubmissionError(null);
     setUploadOverlayTitle('Uploading Resume');
-    setUploadOverlayMessage('Sending your resume and job description to PrepX...');
+    setUploadOverlayMessage('Sending your resume and job description. (This may take up to a minute if the mobile network is slow)');
 
     try {
       const data = await interviewService.upload(resume, jd);
@@ -163,7 +163,9 @@ export const Upload: React.FC = () => {
         // FastAPI validation errors return an array of objects
         errorMessage = detail.map((d: any) => d.msg || d).join('\n');
       } else if (isRecoverableNetworkError(error)) {
-        errorMessage = 'Network Error: The server might still be waking up or your mobile connection may have dropped. Please wait a few seconds and try again.';
+        errorMessage = 'Network Error: The AI service might still be waking up or your mobile connection may have dropped. We are attempting to wake it again now. Please try again soon.';
+        // Automatically trigger backend wake so the next try is more likely to succeed
+        void handleWakeBackendAgain();
       } else if (error.message) {
         errorMessage = error.message;
       }
