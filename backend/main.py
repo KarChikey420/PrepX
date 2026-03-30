@@ -91,36 +91,7 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def log_upload_requests(request, call_next):
-    if request.url.path != "/api/v1/interview/upload":
-        return await call_next(request)
 
-    started_at = perf_counter()
-    logger.info(
-        "upload.http_request_started",
-        method=request.method,
-        path=request.url.path,
-        content_type=request.headers.get("content-type"),
-        content_length=request.headers.get("content-length"),
-        user_agent=request.headers.get("user-agent"),
-        forwarded_for=request.headers.get("x-forwarded-for"),
-    )
-
-    try:
-        response = await call_next(request)
-    except Exception:
-        logger.exception("upload.http_request_failed", path=request.url.path)
-        raise
-
-    logger.info(
-        "upload.http_request_completed",
-        method=request.method,
-        path=request.url.path,
-        status_code=response.status_code,
-        duration_ms=round((perf_counter() - started_at) * 1000, 2),
-    )
-    return response
 
 
 # ── Exception Handlers ─────────────────────────────────────────────────
