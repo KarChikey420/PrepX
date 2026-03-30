@@ -62,6 +62,16 @@ def setup_logging() -> None:
     root_logger.addHandler(handler)
     root_logger.setLevel(settings.log_level.upper())
 
-    # Quiet noisy libraries
-    for noisy in ("uvicorn.access", "motor", "httpcore", "httpx"):
+    # Quiet noisy libraries and driver internals that spam health/heartbeat logs.
+    for noisy in (
+        "uvicorn.access",
+        "motor",
+        "pymongo",
+        "pymongo.topology",
+        "pymongo.serverSelection",
+        "pymongo.connection",
+        "pymongo.command",
+        "httpcore",
+        "httpx",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
