@@ -63,15 +63,20 @@ def setup_logging() -> None:
     root_logger.setLevel(settings.log_level.upper())
 
     # Quiet noisy libraries and driver internals that spam health/heartbeat logs.
+    for noisy in ("uvicorn.access", "motor", "httpcore", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    # PyMongo debug logging can emit verbose SDAM heartbeat payloads when the
+    # app runs with LOG_LEVEL=DEBUG. Disable the namespace explicitly so those
+    # records never reach stdout in production.
     for noisy in (
-        "uvicorn.access",
-        "motor",
         "pymongo",
         "pymongo.topology",
         "pymongo.serverSelection",
         "pymongo.connection",
         "pymongo.command",
-        "httpcore",
-        "httpx",
     ):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
+        noisy_logger = logging.getLogger(noisy)
+        noisy_logger.handlers.clear()
+        noisy_logger.propagate = False
+        noisy_logger.setLevel(logging.CRITICAL + 1)
