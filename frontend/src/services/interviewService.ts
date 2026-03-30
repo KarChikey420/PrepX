@@ -1,9 +1,9 @@
-import api, { ensureBackendReady, isRecoverableNetworkError } from './api';
-import type { 
-  UploadResponse, 
-  StartResponse, 
-  TurnResponse, 
-  FinalReport, 
+import api, { isRecoverableNetworkError } from './api';
+import type {
+  UploadResponse,
+  StartResponse,
+  TurnResponse,
+  FinalReport,
   ReportPollResponse,
   SessionStatusResponse,
 } from '../types/api';
@@ -27,7 +27,6 @@ const withBackendRecovery = async <T>(
 
   for (let attempt = 0; attempt <= retryCount; attempt += 1) {
     try {
-      await ensureBackendReady(attempt > 0);
       return await request(attempt);
     } catch (error) {
       lastError = error;
@@ -64,15 +63,8 @@ export const interviewService = {
   },
 
   waitForUploadReady: async (sessionId: string): Promise<SessionStatusResponse> => {
-    let shouldForceBackendWake = false;
-
     for (let attempt = 0; attempt < UPLOAD_STATUS_MAX_POLLS; attempt += 1) {
       try {
-        // Only force a wake-up after an actual recoverable failure.
-        // Re-warming on every poll adds unnecessary load on Render.
-        await ensureBackendReady(shouldForceBackendWake);
-        shouldForceBackendWake = false;
-
         const status = await interviewService.getSessionStatus(sessionId);
 
         if ((status.status === 'active' || status.status === 'completed') && status.profile) {
@@ -90,8 +82,6 @@ export const interviewService = {
         if (!isRecoverableNetworkError(error)) {
           throw error;
         }
-
-        shouldForceBackendWake = true;
       }
 
       await sleep(UPLOAD_STATUS_POLL_MS);
@@ -112,7 +102,7 @@ export const interviewService = {
   submitTurn: async (sessionId: string, audioBlob: Blob): Promise<TurnResponse> => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
-    
+
     const response = await api.post<TurnResponse>(`/interview/${sessionId}/turn`, formData);
     return response.data;
   },

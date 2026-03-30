@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
-import { ensureBackendReady, isRecoverableNetworkError } from '../services/api';
+import { isRecoverableNetworkError } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, FileText, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,39 +46,12 @@ export const Upload: React.FC = () => {
   const [resume, setResume] = useState<File | null>(null);
   const [jd, setJd] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [isPreparingBackend, setIsPreparingBackend] = useState(true);
-  const [isRetryingBackend, setIsRetryingBackend] = useState(false);
-  const [backendWakeError, setBackendWakeError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [showWakeActions, setShowWakeActions] = useState(false);
+  const [showRetryAction, setShowRetryAction] = useState(false);
   const [uploadOverlayTitle, setUploadOverlayTitle] = useState('Analyzing Profile');
   const [uploadOverlayMessage, setUploadOverlayMessage] = useState('Extracting skills from DNA... please wait.');
   const navigate = useNavigate();
   const setSession = useInterviewStore((state: any) => state.setSession);
-
-  // Pre-wake Render backend on component mount
-  useEffect(() => {
-    let isMounted = true;
-
-    void ensureBackendReady()
-      .then(() => {
-        if (isMounted) {
-          setIsPreparingBackend(false);
-          setBackendWakeError(null);
-        }
-      })
-      .catch((error) => {
-        console.debug('Backend warm-up did not finish before user interaction:', error);
-        if (isMounted) {
-          setIsPreparingBackend(false);
-          setBackendWakeError('The interview service is still waking up. Start will retry once it is reachable.');
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedResume = e.target.files?.[0] ?? null;
@@ -92,32 +65,14 @@ export const Upload: React.FC = () => {
     if (validationError) {
       setResume(null);
       setSubmissionError(validationError);
-      setShowWakeActions(false);
+      setShowRetryAction(false);
       e.target.value = '';
       return;
     }
 
     setResume(selectedResume);
     setSubmissionError(null);
-    setShowWakeActions(false);
-  };
-
-  const handleWakeBackendAgain = async () => {
-    setIsRetryingBackend(true);
-    setIsPreparingBackend(true);
-    setBackendWakeError(null);
-    setSubmissionError(null);
-    setShowWakeActions(false);
-
-    try {
-      await ensureBackendReady(true);
-    } catch (error) {
-      console.debug('Manual backend wake-up failed:', error);
-      setBackendWakeError('The interview service is still not reachable. Keep this page open for 10 to 15 seconds, then tap Start AI Interview again.');
-    } finally {
-      setIsPreparingBackend(false);
-      setIsRetryingBackend(false);
-    }
+    setShowRetryAction(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,9 +86,8 @@ export const Upload: React.FC = () => {
     }
 
     setIsUploading(true);
-    setBackendWakeError(null);
     setSubmissionError(null);
-    setShowWakeActions(false);
+    setShowRetryAction(false);
     setUploadOverlayTitle('Uploading Resume');
     setUploadOverlayMessage('Sending your resume and job description. (This may take up to a minute if the mobile network is slow)');
 
@@ -163,11 +117,10 @@ export const Upload: React.FC = () => {
       const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined;
       const isRecoverable = isRecoverableNetworkError(error);
       let errorMessage = 'Failed to analyze profile. Please try again.';
-      
+
       if (typeof detail === 'string') {
         errorMessage = detail;
       } else if (Array.isArray(detail)) {
-        // FastAPI validation errors return an array of objects
         errorMessage = detail.map((d: { msg?: string } | string) =>
           typeof d === 'string' ? d : d.msg || 'Invalid request.'
         ).join('\n');
@@ -181,9 +134,9 @@ export const Upload: React.FC = () => {
       } else if (error instanceof Error && error.message) {
         errorMessage = error.message;
       }
-      
+
       setSubmissionError(errorMessage);
-      setShowWakeActions(isRecoverable);
+      setShowRetryAction(isRecoverable);
     } finally {
       setIsUploading(false);
       setUploadOverlayTitle('Analyzing Profile');
@@ -206,12 +159,11 @@ export const Upload: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Resume Upload */}
           <GlassCard className="p-4 md:p-8 group hover:border-neon-cyan/30 transition-colors">
             <h3 className="text-lg md:text-xl font-bold mb-6 flex items-center gap-3">
               <FileText className="text-neon-cyan" /> Resume (PDF/DOCX)
             </h3>
-            
+
             <label className="relative flex flex-col items-center justify-center h-48 md:h-64 border-2 border-dashed border-white/10 rounded-xl cursor-pointer hover:bg-white/5 transition-all group-hover:border-neon-cyan/20">
               <input
                 type="file"
@@ -219,7 +171,7 @@ export const Upload: React.FC = () => {
                 accept=".pdf,.docx"
                 onChange={handleFileChange}
               />
-              
+
               <AnimatePresence mode="wait">
                 {resume ? (
                   <motion.div
@@ -252,12 +204,11 @@ export const Upload: React.FC = () => {
             </label>
           </GlassCard>
 
-          {/* JD Input */}
           <GlassCard className="p-4 md:p-8 group hover:border-neon-cyan/30 transition-colors">
             <h3 className="text-lg md:text-xl font-bold mb-6 flex items-center gap-3">
               <FileText className="text-neon-cyan" /> Job Description
             </h3>
-            
+
             <textarea
               className="w-full h-48 md:h-64 bg-slate-900/50 border border-white/10 rounded-xl p-4 text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-neon-cyan/30 focus:ring-1 focus:ring-neon-cyan/20 transition-all resize-none font-medium text-sm md:text-base"
               placeholder="Paste the full job description here..."
@@ -265,7 +216,7 @@ export const Upload: React.FC = () => {
               onChange={(e) => {
                 setJd(e.target.value);
                 setSubmissionError(null);
-                setShowWakeActions(false);
+                setShowRetryAction(false);
               }}
               required
             />
@@ -274,54 +225,29 @@ export const Upload: React.FC = () => {
 
         <div className="flex justify-center pt-8">
           <NeonButton
-            size="lg" 
-            isLoading={isUploading} 
-            disabled={!resume || !jd.trim() || (isPreparingBackend && !backendWakeError)}
+            size="lg"
+            isLoading={isUploading}
+            disabled={!resume || !jd.trim()}
             className="w-full max-w-sm"
           >
-            {isUploading
-              ? 'Analyzing...'
-              : isPreparingBackend && !backendWakeError
-                ? 'Preparing Interview...'
-                : 'START AI INTERVIEW'}
+            {isUploading ? 'Analyzing...' : 'START AI INTERVIEW'}
           </NeonButton>
         </div>
-
-        {isPreparingBackend && !backendWakeError && (
-          <p className="text-center text-sm text-cyan-200/80">
-            Waking up the interview service so mobile uploads don&apos;t hit a cold server.
-          </p>
-        )}
-
-        {backendWakeError && (
-          <p className="text-center text-sm text-amber-200 bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-3 max-w-2xl mx-auto">
-            {backendWakeError}
-          </p>
-        )}
 
         {submissionError && (
           <div className="max-w-2xl mx-auto rounded-2xl border border-rose-400/20 bg-rose-500/10 px-5 py-5 text-rose-100">
             <p className="text-center text-sm md:text-base font-medium">
               {submissionError}
             </p>
-            {showWakeActions && (
+            {showRetryAction && (
               <>
                 <div className="mt-4 space-y-2 text-sm text-rose-100/90">
                   <p>What to do:</p>
-                  <p>1. Keep this page open for 10 to 15 seconds so the Render backend can wake up fully.</p>
-                  <p>2. Tap `Wake Service Again`, then tap `Start AI Interview` once more.</p>
-                  <p>3. If mobile data is unstable, switch to Wi-Fi and try the same resume again.</p>
+                  <p>1. Wait 10 to 15 seconds, then try the upload again.</p>
+                  <p>2. If mobile data is unstable, switch to Wi-Fi and retry the same resume.</p>
+                  <p>3. Keep this page open while the upload is processing so the browser does not pause the request.</p>
                 </div>
-                <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
-                  <NeonButton
-                    type="button"
-                    onClick={() => void handleWakeBackendAgain()}
-                    size="md"
-                    isLoading={isRetryingBackend}
-                    className="w-full sm:w-auto"
-                  >
-                    {isRetryingBackend ? 'Waking Service...' : 'Wake Service Again'}
-                  </NeonButton>
+                <div className="mt-5 flex justify-center">
                   <NeonButton
                     type="submit"
                     size="md"
@@ -336,8 +262,7 @@ export const Upload: React.FC = () => {
           </div>
         )}
       </form>
-      
-      {/* Loading Overlay */}
+
       <AnimatePresence>
         {isUploading && (
           <motion.div
@@ -347,19 +272,19 @@ export const Upload: React.FC = () => {
             className="fixed inset-0 z-50 bg-[#0a192f]/80 backdrop-blur-md flex flex-col items-center justify-center"
           >
             <div className="relative w-32 h-32 mb-8">
-               <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 border-t-2 border-neon-cyan rounded-full"
-               />
-               <motion.div
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-4 border-b-2 border-blue-500/50 rounded-full"
-               />
-               <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-neon-cyan font-black text-2xl italic">P</span>
-               </div>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-0 border-t-2 border-neon-cyan rounded-full"
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-4 border-b-2 border-blue-500/50 rounded-full"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-neon-cyan font-black text-2xl italic">P</span>
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-glow mb-2">{uploadOverlayTitle}</h2>
             <p className="text-gray-400 max-w-md text-center px-6">{uploadOverlayMessage}</p>
