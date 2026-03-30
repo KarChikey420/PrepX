@@ -1,9 +1,9 @@
+// Force direct communication with Render backend in production to bypass 
+// Vercel's 10-second request limit (Hobby/Free plan), which kills mobile uploads.
 const REMOTE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://prepx-hz7r.onrender.com/api/v1';
 
-// Mobile uploads are more reliable when we talk to Render directly instead of
-// routing multipart and audio traffic back through the frontend host.
-export const API_BASE_URL = REMOTE_API_BASE_URL;
-export const BACKEND_ORIGIN = new URL(
-  API_BASE_URL,
-  typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin,
-).origin;
+export const API_BASE_URL = REMOTE_API_BASE_URL.startsWith('http')
+  ? REMOTE_API_BASE_URL
+  : 'https://prepx-hz7r.onrender.com/api/v1';
+
+export const BACKEND_ORIGIN = new URL(API_BASE_URL).origin;
