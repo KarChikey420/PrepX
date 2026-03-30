@@ -73,21 +73,21 @@ app = FastAPI(
 # ── CORS ───────────────────────────────────────────────────────────────
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-
-app.add_middleware(
     SessionMiddleware,
     secret_key=settings.jwt_secret_key,
     session_cookie="prepx_session",
     same_site="none" if settings.frontend_base_url.startswith("https://") else "lax",
     https_only=settings.frontend_base_url.startswith("https://"),
     max_age=600,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
