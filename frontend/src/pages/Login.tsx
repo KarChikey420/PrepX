@@ -1,9 +1,10 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogIn } from 'lucide-react';
+import { FileCheck, Mic2, Activity } from 'lucide-react';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../store/useAuthStore';
+import { FeatureItem } from '../components/FeatureItem';
 
 export const Login: React.FC = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -52,96 +53,223 @@ export const Login: React.FC = () => {
     }
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.3,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] },
+    },
+  };
+
   return (
-    <div className="min-h-screen bg-[#0a192f] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-neon-cyan/10 blur-[150px] rounded-full -z-10 animate-pulse" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/10 blur-[150px] rounded-full -z-10 animate-pulse" />
+    <div className="min-h-screen bg-[#020617] flex selection:bg-neon-cyan/30 text-slate-200 font-sans overflow-hidden relative">
+      {/* Animated Mesh Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-overlay z-10" />
+        
+        <motion.div
+          animate={{
+            x: [0, 100, 0],
+            y: [0, 50, 0],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-blue-600/10 blur-[120px] rounded-full"
+        />
+        <motion.div
+          animate={{
+            x: [0, -80, 0],
+            y: [0, 120, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] bg-neon-cyan/5 blur-[100px] rounded-full"
+        />
+        <motion.div
+          animate={{
+            opacity: [0.1, 0.2, 0.1],
+          }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-[20%] right-[20%] w-[40%] h-[40%] bg-indigo-500/5 blur-[120px] rounded-full"
+        />
+      </div>
 
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white/5 backdrop-blur-2xl p-8 rounded-3xl border border-white/10 shadow-2xl relative z-10"
-      >
-        <div className="flex flex-col items-center mb-8">
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-16 h-16 bg-neon-cyan rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(0,255,240,0.4)] mb-6"
+      <main className="relative z-10 flex flex-col lg:flex-row w-full max-w-[1400px] mx-auto min-h-screen">
+        
+        {/* Left Section: Hero Content */}
+        <div className="flex-1 flex flex-col justify-center px-8 lg:px-20 py-20 border-r border-white/5 bg-gradient-to-r from-[#020617] to-transparent">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-16"
           >
-            <span className="text-slate-950 font-black text-3xl italic">P</span>
+            {/* Badge & Branding */}
+            <motion.div variants={itemVariants} className="space-y-8">
+              <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-blue-500/5 border border-blue-500/10 text-blue-400/80 text-[10px] font-bold tracking-[0.2em] uppercase backdrop-blur-md">
+                <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse" />
+                AI Interview Coach
+              </div>
+              
+              <div className="flex items-center gap-6">
+                <motion.div 
+                  whileHover={{ rotate: 5, scale: 1.05 }}
+                  className="w-16 h-16 bg-slate-950 rounded-2xl border border-white/[0.08] flex items-center justify-center shadow-2xl relative group overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/30 to-neon-cyan/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <span className="text-white font-black text-4xl relative z-10 italic tracking-tighter">P.</span>
+                  <div className="absolute bottom-4 right-4 w-2.5 h-2.5 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)]" />
+                </motion.div>
+                <h1 className="text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-white/40 tracking-tightest">
+                  PrepX
+                </h1>
+              </div>
+              
+              <p className="text-slate-400 text-xl max-w-lg leading-relaxed font-light tracking-wide">
+                The interview coach that reads your resume, listens to your answers, and tells you <span className="text-white/80 font-normal italic">exactly</span> where you lost the job.
+              </p>
+            </motion.div>
+
+            {/* Feature List */}
+            <motion.div variants={itemVariants} className="space-y-1 max-w-md -ml-2">
+              <FeatureItem 
+                icon={FileCheck} 
+                title="Resume & JD matching" 
+                description="Questions tailored to your exact profile and experience."
+              />
+              <FeatureItem 
+                icon={Mic2} 
+                title="Live voice interview" 
+                description="Speak naturally — AI handles STT/TTS in real time."
+              />
+              <FeatureItem 
+                icon={Activity} 
+                title="Multi-agent evaluation" 
+                description="Scored professionally on clarity, depth, and role fit."
+              />
+            </motion.div>
+
+            {/* Layered Waveform Visualizations */}
+            <motion.div variants={itemVariants} className="pt-12 relative h-16">
+              {/* Secondary Echo Waveform */}
+              <div className="flex items-end gap-[4px] h-8 opacity-10 absolute bottom-0 left-0 blur-[1px]">
+                {[...Array(50)].map((_, i) => (
+                  <motion.div
+                    key={`echo-${i}`}
+                    animate={{ height: ['10%', '60%', '20%', '50%', '15%'] }}
+                    transition={{
+                      duration: 2 + Math.random(),
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      delay: i * 0.08
+                    }}
+                    className="w-[2px] bg-indigo-400 rounded-full"
+                  />
+                ))}
+              </div>
+              
+              {/* Primary Waveform */}
+              <div className="flex items-end gap-[4px] h-12 opacity-40 relative z-10">
+                {[...Array(50)].map((_, i) => (
+                  <motion.div
+                    key={`primary-${i}`}
+                    animate={{ height: ['20%', '100%', '30%', '80%', '40%'] }}
+                    transition={{
+                      duration: 1.5 + Math.random(),
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      delay: i * 0.04
+                    }}
+                    className="w-[3px] bg-gradient-to-t from-blue-600 via-neon-cyan to-white/40 rounded-full shadow-[0_0_10px_rgba(0,245,255,0.2)]"
+                  />
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
-          <h1 className="text-4xl font-black text-white tracking-tighter mb-2">PrepX</h1>
-          <p className="text-gray-300 text-center text-md mb-6 leading-relaxed">
-            AI-powered, voice-enabled mock interviews customized to your resume and target job description.
-          </p>
-          <div className="flex flex-col gap-3 text-sm text-gray-400 text-left w-full mx-auto px-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
-              <span>Resume & Job Description Analysis</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
-              <span>Real-time Voice Interactions (STT/TTS)</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
-              <span>Multi-Agent Evaluation & Mentoring</span>
-            </div>
-          </div>
         </div>
 
-        <div className="space-y-4">
-          <button
-            onClick={handleGoogleLogin}
-            disabled={isPreparingLogin}
-            className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg group disabled:cursor-wait disabled:opacity-80 disabled:hover:scale-100"
+        {/* Right Section: Auth Flow with Glassmorphic Card */}
+        <div className="flex-1 flex flex-col justify-center items-center px-8 lg:px-20 py-20 relative overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
+            className="w-full max-w-md p-10 lg:p-12 rounded-[2.5rem] bg-white/[0.02] backdrop-blur-[40px] border border-white/[0.05] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden group"
           >
-            {isPreparingLogin ? (
-              <div className="w-6 h-6 border-[3px] border-slate-300 border-t-slate-900 rounded-full animate-spin" />
-            ) : (
-              <img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6" />
-            )}
-            {isPreparingLogin ? 'Opening Google Sign-In...' : 'Sign in with Google'}
-          </button>
+            {/* Subtle Animated Border Glow */}
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-1000">
+               <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-shimmer" />
+            </div>
 
-          {!isSignInServiceReady && !loginError && (
-            <p className="text-sm text-cyan-200/80 text-center">
-              Waking up secure sign-in so Google opens directly from here.
-            </p>
-          )}
+            <div className="space-y-12 relative z-10">
+              <div className="space-y-4">
+                <h2 className="text-4xl font-bold text-white tracking-tight">Start your first interview</h2>
+                <p className="text-slate-400 font-light leading-relaxed text-lg">
+                  Sign in with Google — <span className="text-white/60">takes 10 seconds.</span><br />
+                  No credit card. Cancel whenever.
+                </p>
+              </div>
 
-          {loginError && (
-            <p className="text-sm text-amber-200 text-center bg-amber-500/10 border border-amber-400/20 rounded-xl px-4 py-3">
-              {loginError}
-            </p>
-          )}
+              <div className="space-y-8">
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={isPreparingLogin}
+                  className="w-full h-16 bg-white border border-transparent rounded-[1.25rem] flex items-center justify-center gap-4 text-slate-950 font-bold text-lg hover:shadow-[0_0_30px_rgba(255,255,255,0.15)] transition-all duration-500 group/btn disabled:opacity-50 disabled:cursor-wait"
+                >
+                  {isPreparingLogin ? (
+                    <div className="w-5 h-5 border-[3px] border-slate-300 border-t-slate-900 rounded-full animate-spin" />
+                  ) : (
+                    <div className="relative flex items-center justify-center transition-transform group-hover/btn:scale-110 duration-500">
+                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="Google" className="w-6 h-6 object-contain" />
+                    </div>
+                  )}
+                  <span>Continue with Google</span>
+                </button>
+
+                <div className="flex items-center gap-4 px-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${isSignInServiceReady ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.8)]' : 'bg-amber-500 animate-pulse'}`} />
+                  <span className="text-xs text-slate-500 font-semibold tracking-[0.1em] uppercase">
+                    {isSignInServiceReady 
+                      ? 'Secure sign-in ready'
+                      : 'Initialising secure gateway...'}
+                  </span>
+                </div>
+              </div>
+
+              {loginError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 rounded-2xl bg-red-500/5 border border-red-500/10 text-red-400/90 text-sm leading-relaxed"
+                >
+                  {loginError}
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
           
-          <div className="relative py-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-sm uppercase">
-              <span className="bg-[#0a192f] px-4 text-gray-500 font-medium">Coming Soon</span>
-            </div>
-          </div>
-
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-white/5 text-gray-500 rounded-xl font-bold text-lg cursor-not-allowed border border-white/5"
+          <motion.div 
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             transition={{ delay: 1.2 }}
+             className="mt-16 text-[10px] text-slate-600 font-bold tracking-[0.3em] uppercase"
           >
-            <LogIn className="w-6 h-6" />
-            Enterprise Sign In
-          </button>
+            Built for professional engineering
+          </motion.div>
         </div>
-
-        <footer className="mt-12 text-center text-gray-500 text-sm">
-          &copy; {new Date().getFullYear()} PrepX. All rights reserved.
-        </footer>
-      </motion.div>
-
-      {/* Grid Pattern Overlay */}
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none -z-5" />
+      </main>
     </div>
   );
 };
