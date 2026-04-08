@@ -72,9 +72,23 @@ export const Login: React.FC = () => {
             <span className="text-slate-950 font-black text-3xl italic">P</span>
           </motion.div>
           <h1 className="text-4xl font-black text-white tracking-tighter mb-2">PrepX</h1>
-          <p className="text-gray-400 text-center text-lg">
-            Master your next interview with AI-powered personalized feedback.
+          <p className="text-gray-300 text-center text-md mb-6 leading-relaxed">
+            AI-powered, voice-enabled mock interviews customized to your resume and target job description.
           </p>
+          <div className="flex flex-col gap-3 text-sm text-gray-400 text-left w-full mx-auto px-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
+              <span>Resume & Job Description Analysis</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
+              <span>Real-time Voice Interactions (STT/TTS)</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(0,255,240,0.8)]" />
+              <span>Multi-Agent Evaluation & Mentoring</span>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
