@@ -5,6 +5,9 @@ Speech-to-Text using Deepgram API (via HTTP).
 
 Implements chunked audio buffering — audio chunks are accumulated
 and sent to the Deepgram API when the buffer reaches a configurable threshold.
+
+Performance: Uses a module-level httpx client with connection pooling
+to avoid TCP+TLS handshake overhead on every request (~200-400ms saved).
 """
 
 from __future__ import annotations
@@ -24,6 +27,38 @@ logger = structlog.get_logger(__name__)
 # Buffer threshold: accumulate at least this many bytes before sending to STT.
 # 16kHz, 16-bit mono PCM ≈ 32KB/s → 48KB ≈ 1.5s of audio.
 DEFAULT_BUFFER_THRESHOLD_BYTES: int = 48_000
+
+# ── Connection-Pooled HTTP Client (Singleton) ─────────────────────────
+# Reuses TCP connections across requests, eliminating DNS + TCP + TLS
+# handshake overhead (~200-400ms per call on Render).
+
+_http_client: httpx.AsyncClient | None = None
+
+
+def get_stt_client() -> httpx.AsyncClient:
+    """Return the singleton httpx client for STT, lazily initialized."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+                keepalive_expiry=120,
+            ),
+            http2=False,
+        )
+        logger.info("stt.client_initialized")
+    return _http_client
+
+
+async def close_stt_client() -> None:
+    """Gracefully close the STT HTTP client. Called during app shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+        logger.info("stt.client_closed")
 
 
 class AudioBuffer:
@@ -95,9 +130,10 @@ async def transcribe_audio(audio_bytes: bytes) -> str:
         model=settings.deepgram_stt_model,
     )
 
+    client = get_stt_client()
+
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, content=audio_bytes)
+        response = await client.post(url, headers=headers, content=audio_bytes)
 
         if response.status_code == 429:
             retry_after = response.headers.get("Retry-After")

@@ -80,32 +80,26 @@ async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict
 
     If no cached state exists, the updates dict becomes the full state.
     Returns the updated state.
+
+    Performance: Single GET→merge→SET cycle (no retry loop).
+    Upstash REST API operations are inherently atomic per-command,
+    so the previous 5-retry optimistic concurrency loop was unnecessary overhead.
     """
     client = get_redis()
     key = _session_key(session_id)
-    
-    # We use a simple WATCH/MULTI/EXEC transaction for atomicity
-    # instead of a Lua script for better compatibility with Upstash REST.
-    for _ in range(5):  # Retry up to 5 times on collision
-        try:
-            # Note: raw upstash-redis async WATCH/MULTI requires careful handling
-            # In a serverless/REST context, we can use a simpler approach:
-            # We fetch, merge, and SET IF MATCH (optimistic concurrency)
-            # However, for simplicity and reliability in this specific REST client,
-            # we'll use the client's built-in get/set logic with a small retry loop.
-            current_raw = await client.get(key)
-            current = json.loads(current_raw) if current_raw else {}
-            current.update(updates)
-            await client.set(key, json.dumps(current, default=str), ex=7200)
-            return current
-        except Exception as e:
-            logger.warning("redis.update_retry", session_id=session_id, error=str(e))
-    
-    # Final fallback if retries fail
-    current = await get_session_state(session_id) or {}
-    current.update(updates)
-    await cache_session_state(session_id, current)
-    return current
+
+    try:
+        current_raw = await client.get(key)
+        current = json.loads(current_raw) if current_raw else {}
+        current.update(updates)
+        await client.set(key, json.dumps(current, default=str), ex=7200)
+        logger.debug("redis.session_updated", session_id=session_id)
+        return current
+    except Exception as e:
+        logger.error("redis.update_failed", session_id=session_id, error=str(e))
+        # Fallback: write updates as the full state
+        await cache_session_state(session_id, updates)
+        return updates
 
 
 # ── Binary Audio Storage (Optimized for JSON-free delivery) ───────────

@@ -28,6 +28,8 @@ from core.exceptions import register_exception_handlers
 from core.logging import setup_logging
 from core.redis import get_redis
 from api.v1.router import v1_router
+from services.voice.tts import close_tts_client
+from services.voice.stt import close_stt_client
 
 # ── Initialize logging before anything else ────────────────────────────
 setup_logging()
@@ -50,6 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    # Gracefully close pooled HTTP clients and database connections
+    await close_tts_client()
+    await close_stt_client()
     await close_db()
     logger.info("app.shutdown_complete")
 

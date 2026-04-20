@@ -13,6 +13,7 @@ Flow:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import time
@@ -460,13 +461,15 @@ async def start_interview(session_id: str) -> StartResponse:
 @router.post("/{session_id}/turn", response_model=UnifiedTurnResponse, summary="Submit audio answer")
 async def process_turn(
     session_id: str,
+    background_tasks: BackgroundTasks,
     audio: UploadFile = File(..., description="Candidate's audio response (WebM/WAV/OGG)"),
 ) -> UnifiedTurnResponse:
     """
     Step 3 (repeated) — Process one interview turn.
 
-    Pipeline:
-      Audio → STT → Evaluate → Mentor hint → Adaptive next question → TTS
+    Optimized pipeline:
+      Audio → STT → Evaluate → (Mentor + Next Question) concurrent → TTS
+      MongoDB persist runs in background (Redis is source of truth).
     """
     turn_start = time.perf_counter()
     logger.info("unified.turn_started", session_id=session_id)
@@ -488,6 +491,7 @@ async def process_turn(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="No audio data received.")
 
+    stt_start = time.perf_counter()
     try:
         transcript = await transcribe_audio(audio_bytes)
     except Exception as e:
@@ -497,6 +501,8 @@ async def process_turn(
     if not transcript.strip():
         raise HTTPException(status_code=400, detail="Could not understand the audio. Please try again.")
 
+    stt_ms = round((time.perf_counter() - stt_start) * 1000, 2)
+
     # Record candidate answer in history
     state.conversation_history.append({
         "role": "candidate",
@@ -504,7 +510,8 @@ async def process_turn(
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
-    # ── 2. Evaluate ────────────────────────────────────────────────────
+    # ── 2. Evaluate (must complete before mentor, needs score) ─────────
+    eval_start = time.perf_counter()
     evaluation_dict: Dict[str, Any] = await _analyzer.evaluate_answer(
         question=last_question,
         expected_keywords=current_q.get("expected_keywords", []),
@@ -516,66 +523,75 @@ async def process_turn(
     evaluation_dict["focus_area"] = current_q.get("focus_area", "")
     state.evaluations.append(evaluation_dict)
     state.last_score = evaluation_dict.get("score")
+    eval_ms = round((time.perf_counter() - eval_start) * 1000, 2)
 
     logger.info(
         "unified.turn_evaluated",
         session_id=session_id,
         q_index=current_index,
         score=state.last_score,
-        elapsed_ms=round((time.perf_counter() - turn_start) * 1000, 2),
+        stt_ms=stt_ms,
+        eval_ms=eval_ms,
     )
 
-    # ── 3. Mentor hint ─────────────────────────────────────────────────
-    mentor_hint = "Great effort, let's continue."
-    feedback_text = evaluation_dict.get("feedback", "")
-    try:
-        eval_result = EvaluationResult(
-            score=evaluation_dict.get("score", 5),
-            feedback=feedback_text,
-            strengths=evaluation_dict.get("strengths", []),
-            weaknesses=evaluation_dict.get("weaknesses", []),
-        )
-        next_index = current_index + 1
-        is_last = next_index >= TOTAL_QUESTIONS
-        next_skill = (
-            state.questions[next_index].get("focus_area")
-            if not is_last
-            else None
-        )
-        mentor_hint = await _mentor.generate_transition(
-            evaluation=eval_result,
-            skill=current_q.get("focus_area", ""),
-            is_last_question_for_skill=is_last,
-            next_skill=next_skill,
-        )
-    except Exception as e:
-        logger.warning("unified.mentor_failed", error=str(e))
+    # ── 3. Parallel: Mentor hint + Next question ───────────────────────
+    # These are independent of each other — run concurrently with asyncio.gather
+    parallel_start = time.perf_counter()
 
-    # ── 4. Advance index ───────────────────────────────────────────────
     state.current_question_index += 1
     next_index = state.current_question_index
     is_complete = next_index >= TOTAL_QUESTIONS
 
-    # ── 5. Next question + TTS ─────────────────────────────────────────
-    next_question_text = ""
-    next_audio_b64 = None
-    next_focus_area = ""
-    next_q_type = ""
+    feedback_text = evaluation_dict.get("feedback", "")
 
-    if not is_complete:
+    async def _get_mentor_hint() -> str:
         try:
-            next_question_text, _ = await _interviewer.get_next_question(
+            eval_result = EvaluationResult(
+                score=evaluation_dict.get("score", 5),
+                feedback=feedback_text,
+                strengths=evaluation_dict.get("strengths", []),
+                weaknesses=evaluation_dict.get("weaknesses", []),
+            )
+            next_skill = (
+                state.questions[next_index].get("focus_area")
+                if not is_complete
+                else None
+            )
+            return await _mentor.generate_transition(
+                evaluation=eval_result,
+                skill=current_q.get("focus_area", ""),
+                is_last_question_for_skill=is_complete,
+                next_skill=next_skill,
+            )
+        except Exception as e:
+            logger.warning("unified.mentor_failed", error=str(e))
+            return "Great effort, let's continue."
+
+    async def _get_next_question() -> tuple[str, str, str]:
+        if is_complete:
+            return "", "", ""
+        try:
+            q_text, _ = await _interviewer.get_next_question(
                 questions=state.questions,
                 current_index=next_index,
                 last_score=state.last_score,
             )
             next_q_data = state.questions[next_index]
-            next_focus_area = next_q_data.get("focus_area", "")
-            next_q_type = next_q_data.get("type", "")
+            return q_text, next_q_data.get("focus_area", ""), next_q_data.get("type", "")
         except Exception as e:
             logger.error("unified.next_question_error", error=str(e))
-            next_question_text = f"Tell me about your experience in {state.role}."
+            return f"Tell me about your experience in {state.role}.", "", ""
 
+    # Run mentor + next question concurrently
+    mentor_hint, (next_question_text, next_focus_area, next_q_type) = await asyncio.gather(
+        _get_mentor_hint(),
+        _get_next_question(),
+    )
+    parallel_ms = round((time.perf_counter() - parallel_start) * 1000, 2)
+
+    # ── 4. TTS for next question ───────────────────────────────────────
+    audio_url = None
+    if not is_complete and next_question_text:
         state.last_question = next_question_text
         state.conversation_history.append({
             "role": "interviewer",
@@ -585,26 +601,36 @@ async def process_turn(
         audio_url = await _synthesize_and_store(session_id, next_index, next_question_text)
     else:
         state.status = "completed"
-        audio_url = None
 
-    # ── 6. Persist (DB Synchronous consistency fix) ───────────────────
-    try:
-        session = await InterviewSession.get(PydanticObjectId(session_id))
-        if session:
-            session.conversation_history = state.conversation_history
-            session.current_skill_index = state.current_question_index
-            if is_complete:
-                session.status = SessionStatus.COMPLETED
-            session.updated_at = datetime.now(timezone.utc)
-            await session.save()
-    except Exception as e:
-        logger.error("unified.db_persist_error", error=str(e))
-
-    # Finally update Redis
+    # ── 5. Update Redis (hot path source of truth) ─────────────────────
     await update_session_state(session_id, state.model_dump())
 
+    # ── 6. Persist to MongoDB in background (non-blocking) ─────────────
+    async def _persist_to_db():
+        try:
+            session = await InterviewSession.get(PydanticObjectId(session_id))
+            if session:
+                session.conversation_history = state.conversation_history
+                session.current_skill_index = state.current_question_index
+                if is_complete:
+                    session.status = SessionStatus.COMPLETED
+                session.updated_at = datetime.now(timezone.utc)
+                await session.save()
+        except Exception as e:
+            logger.error("unified.db_persist_error", error=str(e))
+
+    background_tasks.add_task(_persist_to_db)
+
     total_ms = round((time.perf_counter() - turn_start) * 1000, 2)
-    logger.info("unified.turn_complete", session_id=session_id, total_ms=total_ms, is_complete=is_complete)
+    logger.info(
+        "unified.turn_complete",
+        session_id=session_id,
+        total_ms=total_ms,
+        stt_ms=stt_ms,
+        eval_ms=eval_ms,
+        parallel_ms=parallel_ms,
+        is_complete=is_complete,
+    )
 
     return UnifiedTurnResponse(
         transcription=transcript,

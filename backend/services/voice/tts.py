@@ -5,6 +5,9 @@ Text-to-Speech using Deepgram Aura API.
 
 Implements streaming TTS — text is sent to the Deepgram API and audio byte
 chunks are yielded back as an async generator.
+
+Performance: Uses a module-level httpx client with connection pooling
+to avoid TCP+TLS handshake overhead on every request (~200-400ms saved).
 """
 
 from __future__ import annotations
@@ -20,6 +23,38 @@ from core.config import settings
 from core.exceptions import ExternalAPIError
 
 logger = structlog.get_logger(__name__)
+
+# ── Connection-Pooled HTTP Client (Singleton) ─────────────────────────
+# Reuses TCP connections across requests, eliminating DNS + TCP + TLS
+# handshake overhead (~200-400ms per call on Render).
+
+_http_client: httpx.AsyncClient | None = None
+
+
+def get_tts_client() -> httpx.AsyncClient:
+    """Return the singleton httpx client for TTS, lazily initialized."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(
+                max_connections=10,
+                max_keepalive_connections=5,
+                keepalive_expiry=120,
+            ),
+            http2=False,  # Deepgram doesn't support HTTP/2 for TTS
+        )
+        logger.info("tts.client_initialized")
+    return _http_client
+
+
+async def close_tts_client() -> None:
+    """Gracefully close the TTS HTTP client. Called during app shutdown."""
+    global _http_client
+    if _http_client is not None and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+        logger.info("tts.client_closed")
 
 
 async def stream_tts(
@@ -59,34 +94,35 @@ async def stream_tts(
         sample_rate=sample_rate,
     )
 
+    client = get_tts_client()
+
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            async with client.stream("POST", url, headers=headers, json=payload) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    error_msg = error_text.decode()
-                    logger.error(
-                        "tts.request_failed",
-                        status_code=response.status_code,
-                        error=error_msg,
-                        url=url,
-                    )
-                    raise ExternalAPIError(
-                        service="DeepgramTTS",
-                        message=f"TTS request failed with status {response.status_code}: {error_msg}",
-                    )
-
-                total_bytes_yielded = 0
-                async for chunk in response.aiter_bytes():
-                    if chunk:
-                        total_bytes_yielded += len(chunk)
-                        yield chunk
-
-                logger.info(
-                    "tts.streaming_complete",
-                    text_length=len(text),
-                    total_audio_bytes=total_bytes_yielded,
+        async with client.stream("POST", url, headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                error_text = await response.aread()
+                error_msg = error_text.decode()
+                logger.error(
+                    "tts.request_failed",
+                    status_code=response.status_code,
+                    error=error_msg,
+                    url=url,
                 )
+                raise ExternalAPIError(
+                    service="DeepgramTTS",
+                    message=f"TTS request failed with status {response.status_code}: {error_msg}",
+                )
+
+            total_bytes_yielded = 0
+            async for chunk in response.aiter_bytes():
+                if chunk:
+                    total_bytes_yielded += len(chunk)
+                    yield chunk
+
+            logger.info(
+                "tts.streaming_complete",
+                text_length=len(text),
+                total_audio_bytes=total_bytes_yielded,
+            )
 
     except Exception as e:
         logger.error("tts.error", error=str(e))

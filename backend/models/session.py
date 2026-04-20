@@ -101,6 +101,12 @@ class InterviewSession(Document):
     class Settings:
         name = "interview_sessions"
         use_state_management = True
+        indexes = [
+            "user_id",
+            "status",
+            [("user_id", 1), ("created_at", -1)],  # User's sessions, newest first
+            [("status", 1), ("created_at", -1)],    # Filter by status, sorted
+        ]
 
     @property
     def current_skill(self) -> Optional[str]:

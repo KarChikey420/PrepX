@@ -150,6 +150,10 @@ class ReportGenerator(BaseAgent):
         return "N/A"
 
 
+# ── Module-level singleton (avoids re-creating AsyncOpenAI client per call) ──
+_report_generator = ReportGenerator()
+
+
 async def generate_session_report(session_id: str) -> None:
     """
     Background task entry point: load session, generate report, save to DB.
@@ -165,8 +169,7 @@ async def generate_session_report(session_id: str) -> None:
             logger.error("report.session_not_found", session_id=session_id)
             return
 
-        generator = ReportGenerator()
-        report_md = await generator.generate_report(session)
+        report_md = await _report_generator.generate_report(session)
 
         # Save report to the session document
         session.report_markdown = report_md
