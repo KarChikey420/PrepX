@@ -22,10 +22,12 @@ interface InterviewState {
   status: 'idle' | 'analyzing' | 'interviewing' | 'finishing' | 'completed';
   error: string | null;
   audioPlayer: HTMLAudioElement | null;
+  preloadedAudio: Map<string, HTMLAudioElement>;
 
   setSession: (sessionId: string, profile: CandidateProfile) => void;
   setTurn: (turn: TurnResponse) => void;
   playAudio: (url: string | null) => Promise<void>;
+  preloadAudio: (url: string | null) => void;
   validateSession: () => Promise<boolean>;
   setReport: (report: FinalReport) => void;
   advanceFlowStage: (stage: InterviewFlowStage) => void;
@@ -62,7 +64,7 @@ const initialFlowStage = (() => {
   return 'upload';
 })();
 
-export const useInterviewStore = create<InterviewState>((set) => ({
+export const useInterviewStore = create<InterviewState>((set, get) => ({
   sessionId: initialSessionId,
   profile: initialProfile,
   currentTurn: null,
@@ -71,26 +73,46 @@ export const useInterviewStore = create<InterviewState>((set) => ({
   status: 'idle',
   error: null,
   audioPlayer: null,
+  preloadedAudio: new Map<string, HTMLAudioElement>(),
 
+  // Fix 7: Preload audio as soon as the URL is known — fetches & buffers in background.
+  // By the time the user hears "next question", playback starts instantly.
+  preloadAudio: (url) => {
+    if (!url) return;
+    const absoluteUrl = new URL(url, API_BASE_URL).toString();
+    const { preloadedAudio } = get();
+    if (preloadedAudio.has(absoluteUrl)) return; // already preloaded
+
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = absoluteUrl; // browser starts buffering immediately
+    const updated = new Map(preloadedAudio);
+    updated.set(absoluteUrl, audio);
+    set({ preloadedAudio: updated });
+  },
+
+  // Plays audio — uses preloaded element if available (zero network delay).
   playAudio: async (url) => {
     if (!url) return;
     try {
-      const { audioPlayer } = useInterviewStore.getState();
+      const { audioPlayer, preloadedAudio } = get();
       if (audioPlayer) {
         audioPlayer.pause();
       }
-      
+
       const absoluteUrl = new URL(url, API_BASE_URL).toString();
-      const newPlayer = new Audio(absoluteUrl);
-      set({ audioPlayer: newPlayer });
-      await newPlayer.play();
+      const preloaded = preloadedAudio.get(absoluteUrl);
+      const player = preloaded ?? new Audio(absoluteUrl);
+
+      set({ audioPlayer: player });
+      await player.play();
     } catch (err) {
       console.error('Failed to play audio:', err);
     }
   },
 
   validateSession: async () => {
-    const { sessionId, reset } = useInterviewStore.getState();
+    const { sessionId, reset } = get();
     if (!sessionId) return false;
 
     try {
@@ -142,7 +164,6 @@ export const useInterviewStore = create<InterviewState>((set) => ({
       if (FLOW_STAGE_ORDER[stage] <= FLOW_STAGE_ORDER[current.flowStage]) {
         return current;
       }
-
       localStorage.setItem('prepX_flowStage', stage);
       return { ...current, flowStage: stage };
     }),
@@ -164,6 +185,7 @@ export const useInterviewStore = create<InterviewState>((set) => ({
       flowStage: 'upload',
       status: 'idle',
       error: null,
+      preloadedAudio: new Map(),
     });
   },
 }));

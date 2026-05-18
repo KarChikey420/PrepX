@@ -11,7 +11,7 @@ import { useInterviewStore } from '../store/useInterviewStore';
 import { useRecorder } from '../hooks/useRecorder';
 
 export const Interview: React.FC = () => {
-  const { sessionId, currentTurn, setTurn, setStatus, setReport, playAudio } = useInterviewStore();
+  const { sessionId, currentTurn, setTurn, setStatus, setReport, playAudio, preloadAudio } = useInterviewStore();
   const { isRecording, audioBlob, startRecording, stopRecording, setAudioBlob } = useRecorder();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -48,10 +48,12 @@ export const Interview: React.FC = () => {
       if (data.is_complete) {
         void handleFinish();
       } else if (data.audio_url) {
-        // Auto-play next question
+        // Preload immediately so audio is buffered by the time setTimeout fires.
+        preloadAudio(data.audio_url);
+        // Small delay to let the user breathe before auto-playing next question.
         setTimeout(() => {
           void playAudio(data.audio_url!);
-        }, 1500); // Small delay to let user breathe
+        }, 1500);
       }
     } catch (err) {
       console.error('Failed to submit answer:', err);

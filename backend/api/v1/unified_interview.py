@@ -511,14 +511,15 @@ async def process_turn(
     })
 
     # ── 2. Evaluate (must complete before mentor, needs score) ─────────
+    # Uses EvaluatorAgent with function/tool calling for guaranteed structured output.
     eval_start = time.perf_counter()
-    evaluation_dict: Dict[str, Any] = await _analyzer.evaluate_answer(
+    eval_result = await _evaluator.evaluate(
         question=last_question,
-        expected_keywords=current_q.get("expected_keywords", []),
         answer=transcript,
-        focus_area=current_q.get("focus_area", ""),
+        skill=current_q.get("focus_area", ""),
         level=state.level,
     )
+    evaluation_dict: Dict[str, Any] = eval_result.model_dump()
     evaluation_dict["question_id"] = current_q.get("id")
     evaluation_dict["focus_area"] = current_q.get("focus_area", "")
     state.evaluations.append(evaluation_dict)
@@ -589,7 +590,7 @@ async def process_turn(
     )
     parallel_ms = round((time.perf_counter() - parallel_start) * 1000, 2)
 
-    # ── 4. TTS for next question ───────────────────────────────────────
+    # ── 4. TTS for next question (non-blocking) ─────────────────────────
     audio_url = None
     if not is_complete and next_question_text:
         state.last_question = next_question_text
@@ -598,12 +599,22 @@ async def process_turn(
             "content": next_question_text,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        audio_url = await _synthesize_and_store(session_id, next_index, next_question_text)
+        # Return the URL immediately — TTS runs in background.
+        # Audio will be cached in Redis by the time the frontend fetches it.
+        audio_url = _audio_url_for_turn(session_id, next_index)
+        background_tasks.add_task(_synthesize_and_store, session_id, next_index, next_question_text)
     else:
         state.status = "completed"
 
-    # ── 5. Update Redis (hot path source of truth) ─────────────────────
-    await update_session_state(session_id, state.model_dump())
+    # ── 5. Update Redis (hot path — partial update, only changed fields) ─
+    await update_session_state(session_id, {
+        "current_question_index": state.current_question_index,
+        "last_question": state.last_question,
+        "last_score": state.last_score,
+        "status": state.status,
+        "evaluations": state.evaluations,
+        "conversation_history": state.conversation_history,
+    })
 
     # ── 6. Persist to MongoDB in background (non-blocking) ─────────────
     async def _persist_to_db():

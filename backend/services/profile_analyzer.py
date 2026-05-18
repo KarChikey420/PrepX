@@ -8,11 +8,13 @@ and generate the final structured interview report.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any, Dict, List
 
 import structlog
 
+from core.redis import get_redis
 from models.schemas import CandidateProfile, UnifiedQuestion, FinalReport
 from services.agents.base import BaseAgent
 
@@ -44,7 +46,24 @@ class ProfileAnalyzerAgent(BaseAgent):
     ) -> CandidateProfile:
         """
         Analyze resume + JD and return a structured CandidateProfile.
+        Results are cached in Redis for 1 hour by a SHA-256 hash of the
+        resume + JD content, so re-uploading the same resume is instant.
         """
+        # Fix 9: Hash-based Redis cache — avoids redundant LLM call (~3-8s saved).
+        cache_key = (
+            "profile_analysis:"
+            + hashlib.sha256((resume_text + job_description).encode()).hexdigest()[:24]
+        )
+        try:
+            redis = get_redis()
+            cached_raw = await redis.get(cache_key)
+            if cached_raw:
+                logger.info("profile_analyzer.cache_hit", cache_key=cache_key)
+                return CandidateProfile(**json.loads(cached_raw))
+        except Exception as cache_err:
+            # Cache miss or Redis error — fall through to LLM call.
+            logger.warning("profile_analyzer.cache_read_error", error=str(cache_err))
+
         prompt = f"""Analyze the following resume and job description.
 Return ONLY valid raw JSON matching the schema below. No extra text.
 
@@ -72,7 +91,14 @@ JSON SCHEMA:
         response_text = await self.generate(prompt)
         try:
             data = self._parse_json(response_text)
-            return CandidateProfile(**data)
+            profile = CandidateProfile(**data)
+            # Store in Redis for 1 hour.
+            try:
+                await redis.set(cache_key, profile.model_dump_json(), ex=3600)
+                logger.debug("profile_analyzer.cache_written", cache_key=cache_key)
+            except Exception as write_err:
+                logger.warning("profile_analyzer.cache_write_error", error=str(write_err))
+            return profile
         except Exception as e:
             logger.error("profile_analyzer.analyze_error", error=str(e), raw_response=response_text)
             raise ValueError(f"Failed to parse LLM response into CandidateProfile: {str(e)}") from e

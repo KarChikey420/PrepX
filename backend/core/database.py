@@ -32,6 +32,11 @@ async def init_db() -> None:
         settings.mongo_link,
         serverSelectionTimeoutMS=30000,
         connectTimeoutMS=30000,
+        maxPoolSize=20,        # Enough for concurrent requests without waste
+        minPoolSize=2,         # Keep 2 warm connections at all times
+        maxIdleTimeMS=45000,   # Drop idle connections after 45s
+        retryWrites=True,
+        retryReads=True,
     )
 
     await init_beanie(

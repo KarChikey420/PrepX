@@ -24,6 +24,24 @@ from core.exceptions import ExternalAPIError, RateLimitError
 
 logger = structlog.get_logger(__name__)
 
+# ── Shared LLM Client (Singleton) ─────────────────────────────────────
+# All agents share a single AsyncOpenAI client with one connection pool,
+# eliminating redundant TCP+TLS handshakes (~200-400ms saved per cold call).
+
+_shared_llm_client: AsyncOpenAI | None = None
+
+
+def _get_shared_llm_client() -> AsyncOpenAI:
+    """Return the singleton AsyncOpenAI client, lazily initialized."""
+    global _shared_llm_client
+    if _shared_llm_client is None:
+        _shared_llm_client = AsyncOpenAI(
+            api_key=settings.kimi_api_key,
+            base_url=settings.kimi_base_url,
+        )
+        logger.info("agent.shared_client_initialized", base_url=settings.kimi_base_url)
+    return _shared_llm_client
+
 
 class BaseAgent:
     """
@@ -45,10 +63,7 @@ class BaseAgent:
         self.temperature = temperature
         self.max_tokens = max_tokens
 
-        self._client = AsyncOpenAI(
-            api_key=settings.kimi_api_key,
-            base_url=settings.kimi_base_url,
-        )
+        self._client = _get_shared_llm_client()
 
     @retry(
         retry=retry_if_exception_type((openai.APITimeoutError, openai.APIConnectionError)),
