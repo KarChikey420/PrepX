@@ -602,7 +602,10 @@ async def process_turn(
         # Return the URL immediately — TTS runs in background.
         # Audio will be cached in Redis by the time the frontend fetches it.
         audio_url = _audio_url_for_turn(session_id, next_index)
-        background_tasks.add_task(_synthesize_and_store, session_id, next_index, next_question_text)
+        
+        # Combine mentor hint and next question for TTS
+        tts_text = f"{mentor_hint}\n\n{next_question_text}" if mentor_hint else next_question_text
+        background_tasks.add_task(_synthesize_and_store, session_id, next_index, tts_text)
     else:
         state.status = "completed"
 
@@ -859,7 +862,15 @@ async def check_session_status(session_id: str) -> SessionStatusResponse:
 @router.get("/{session_id}/audio/{turn_id}", summary="Fetch binary audio WAV")
 async def get_turn_audio(session_id: str, turn_id: int):
     """Serve binary WAV audio from Redis cache."""
-    audio_bytes = await get_audio_bytes(session_id, turn_id)
+    # Since TTS runs in the background, we might receive the request
+    # slightly before the audio is written to Redis. Poll for up to 10s.
+    audio_bytes = None
+    for _ in range(20):
+        audio_bytes = await get_audio_bytes(session_id, turn_id)
+        if audio_bytes:
+            break
+        await asyncio.sleep(0.5)
+
     if not audio_bytes:
         raise HTTPException(status_code=404, detail="Audio not found or expired.")
     
