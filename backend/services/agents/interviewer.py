@@ -72,7 +72,7 @@ class InterviewerAgent(BaseAgent):
         super().__init__(
             system_prompt=INTERVIEWER_SYSTEM_PROMPT,
             temperature=1.0,
-            max_tokens=200,
+            max_tokens=4096,
         )
 
     async def get_next_question(

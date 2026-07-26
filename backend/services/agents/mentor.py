@@ -44,7 +44,7 @@ class MentorAgent(BaseAgent):
         super().__init__(
             system_prompt=MENTOR_SYSTEM_PROMPT,
             temperature=1.0,
-            max_tokens=300,
+            max_tokens=4096,
         )
 
     async def generate_transition(

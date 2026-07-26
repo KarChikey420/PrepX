@@ -95,7 +95,7 @@ class EvaluatorAgent(BaseAgent):
         super().__init__(
             system_prompt=EVALUATOR_SYSTEM_PROMPT,
             temperature=1.0,
-            max_tokens=800,
+            max_tokens=4096,
         )
 
     async def evaluate(
