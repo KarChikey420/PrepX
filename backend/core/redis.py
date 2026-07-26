@@ -5,6 +5,11 @@ Upstash Redis REST client for distributed session state caching.
 
 Uses the Upstash REST API (HTTP-based) rather than raw TCP Redis,
 which is ideal for serverless / edge-compatible deployments.
+
+All public helpers are designed to be *resilient*: if the Redis endpoint is
+unreachable (DNS failure, network error, expired database), every function
+returns a safe fallback value (None / empty dict / no-op) and logs a warning
+instead of propagating the exception to callers.
 """
 
 from __future__ import annotations
@@ -51,11 +56,16 @@ async def cache_session_state(session_id: str, state: dict[str, Any], ttl_second
         session_id: The interview session ID.
         state: Dictionary representing the serializable session state.
         ttl_seconds: Time-to-live in seconds (default 2 hours).
+
+    Fails silently if Redis is unreachable — MongoDB remains the source of truth.
     """
-    client = get_redis()
-    payload = json.dumps(state, default=str)
-    await client.set(_session_key(session_id), payload, ex=ttl_seconds)
-    logger.debug("redis.session_cached", session_id=session_id, ttl=ttl_seconds)
+    try:
+        client = get_redis()
+        payload = json.dumps(state, default=str)
+        await client.set(_session_key(session_id), payload, ex=ttl_seconds)
+        logger.debug("redis.session_cached", session_id=session_id, ttl=ttl_seconds)
+    except Exception as e:
+        logger.warning("redis.cache_session_failed", session_id=session_id, error=str(e))
 
 
 async def get_session_state(session_id: str) -> Optional[dict[str, Any]]:
@@ -63,15 +73,19 @@ async def get_session_state(session_id: str) -> Optional[dict[str, Any]]:
     Retrieve cached session state from Redis.
 
     Returns:
-        The session state dict, or None if not found / expired.
+        The session state dict, or None if not found, expired, or Redis is unreachable.
     """
-    client = get_redis()
-    raw: Optional[str] = await client.get(_session_key(session_id))  # type: ignore[assignment]
-    if raw is None:
-        logger.debug("redis.session_miss", session_id=session_id)
+    try:
+        client = get_redis()
+        raw: Optional[str] = await client.get(_session_key(session_id))  # type: ignore[assignment]
+        if raw is None:
+            logger.debug("redis.session_miss", session_id=session_id)
+            return None
+        logger.debug("redis.session_hit", session_id=session_id)
+        return json.loads(raw)  # type: ignore[arg-type]
+    except Exception as e:
+        logger.warning("redis.get_session_failed", session_id=session_id, error=str(e))
         return None
-    logger.debug("redis.session_hit", session_id=session_id)
-    return json.loads(raw)  # type: ignore[arg-type]
 
 
 async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict[str, Any]:
@@ -85,10 +99,9 @@ async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict
     Upstash REST API operations are inherently atomic per-command,
     so the previous 5-retry optimistic concurrency loop was unnecessary overhead.
     """
-    client = get_redis()
-    key = _session_key(session_id)
-
     try:
+        client = get_redis()
+        key = _session_key(session_id)
         current_raw = await client.get(key)
         current = json.loads(current_raw) if current_raw else {}
         current.update(updates)
@@ -96,9 +109,7 @@ async def update_session_state(session_id: str, updates: dict[str, Any]) -> dict
         logger.debug("redis.session_updated", session_id=session_id)
         return current
     except Exception as e:
-        logger.error("redis.update_failed", session_id=session_id, error=str(e))
-        # Fallback: write updates as the full state
-        await cache_session_state(session_id, updates)
+        logger.warning("redis.update_session_failed", session_id=session_id, error=str(e))
         return updates
 
 
@@ -112,20 +123,22 @@ def _audio_key(session_id: str, turn_index: int) -> str:
 
 async def store_audio_bytes(session_id: str, turn_index: int, audio_bytes: bytes, ttl: int = 600) -> None:
     """Store audio bytes as base64 text for safe transport through Upstash REST."""
-    client = get_redis()
-    encoded_audio = base64.b64encode(audio_bytes).decode("ascii")
-    await client.set(_audio_key(session_id, turn_index), encoded_audio, ex=ttl)
-    logger.debug("redis.audio_stored", session_id=session_id, turn=turn_index, size=len(audio_bytes))
+    try:
+        client = get_redis()
+        encoded_audio = base64.b64encode(audio_bytes).decode("ascii")
+        await client.set(_audio_key(session_id, turn_index), encoded_audio, ex=ttl)
+        logger.debug("redis.audio_stored", session_id=session_id, turn=turn_index, size=len(audio_bytes))
+    except Exception as e:
+        logger.warning("redis.store_audio_failed", session_id=session_id, turn=turn_index, error=str(e))
 
 
 async def get_audio_bytes(session_id: str, turn_index: int) -> Optional[bytes]:
     """Retrieve audio bytes that were stored as base64 text."""
-    client = get_redis()
-    encoded_audio: Optional[str] = await client.get(_audio_key(session_id, turn_index))  # type: ignore[assignment]
-    if encoded_audio is None:
-        return None
-
     try:
+        client = get_redis()
+        encoded_audio: Optional[str] = await client.get(_audio_key(session_id, turn_index))  # type: ignore[assignment]
+        if encoded_audio is None:
+            return None
         return base64.b64decode(encoded_audio)
     except (TypeError, ValueError) as exc:
         logger.error(
@@ -135,10 +148,17 @@ async def get_audio_bytes(session_id: str, turn_index: int) -> Optional[bytes]:
             error=str(exc),
         )
         return None
+    except Exception as e:
+        logger.warning("redis.get_audio_failed", session_id=session_id, turn=turn_index, error=str(e))
+        return None
 
 
 async def delete_session_state(session_id: str) -> None:
     """Remove session state from Redis."""
-    client = get_redis()
-    await client.delete(_session_key(session_id))
-    logger.debug("redis.session_deleted", session_id=session_id)
+    try:
+        client = get_redis()
+        await client.delete(_session_key(session_id))
+        logger.debug("redis.session_deleted", session_id=session_id)
+    except Exception as e:
+        logger.warning("redis.delete_session_failed", session_id=session_id, error=str(e))
+
