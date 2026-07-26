@@ -36,7 +36,7 @@ class ProfileAnalyzerAgent(BaseAgent):
                 "and produce actionable performance reports. "
                 "Always return raw valid JSON only — no markdown fences, no explanations."
             ),
-            temperature=0.2,
+            temperature=1.0,
         )
 
     # ── Profile Analysis ───────────────────────────────────────────────

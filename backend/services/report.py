@@ -60,7 +60,7 @@ class ReportGenerator(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             system_prompt=REPORT_SYSTEM_PROMPT,
-            temperature=0.5,
+            temperature=1.0,
             max_tokens=4096,
         )
 
