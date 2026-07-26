@@ -94,8 +94,8 @@ class EvaluatorAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             system_prompt=EVALUATOR_SYSTEM_PROMPT,
-            temperature=0.3,  # Low temperature for consistent scoring
-            max_tokens=512,
+            temperature=1.0,
+            max_tokens=800,
         )
 
     async def evaluate(
@@ -165,9 +165,10 @@ class EvaluatorAgent(BaseAgent):
         # attempt to parse the response content as JSON.
         logger.warning("evaluator.no_tool_call", content=message.content)
 
-        if message.content:
+        if message.content or getattr(message, "reasoning_content", None):
+            raw = message.content or getattr(message, "reasoning_content", "")
             try:
-                parsed = json.loads(message.content)
+                parsed = json.loads(raw)
                 return EvaluationResult(**parsed)
             except (json.JSONDecodeError, ValueError):
                 pass

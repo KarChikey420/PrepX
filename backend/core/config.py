@@ -30,8 +30,8 @@ class Settings(BaseSettings):
         description="OpenAI-compatible base URL for Kimi K2",
     )
     kimi_model: str = Field(
-        default="moonshot-v1-8k",
-        description="Model identifier for Kimi K2",
+        default="openai/gpt-oss-20b",
+        description="Model identifier for LLM",
     )
 
     # ── Database (MongoDB Atlas) ───────────────────────────────────────

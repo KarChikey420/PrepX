@@ -71,7 +71,7 @@ class InterviewerAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             system_prompt=INTERVIEWER_SYSTEM_PROMPT,
-            temperature=0.6,
+            temperature=1.0,
             max_tokens=200,
         )
 

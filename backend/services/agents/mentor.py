@@ -43,8 +43,8 @@ class MentorAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(
             system_prompt=MENTOR_SYSTEM_PROMPT,
-            temperature=0.8,  # Higher creativity for natural speech
-            max_tokens=150,   # Short responses only
+            temperature=1.0,
+            max_tokens=300,
         )
 
     async def generate_transition(

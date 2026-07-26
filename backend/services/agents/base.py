@@ -55,8 +55,8 @@ class BaseAgent:
         self,
         system_prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 1024,
+        temperature: float = 1.0,
+        max_tokens: int = 4096,
     ) -> None:
         self.system_prompt = system_prompt
         self.model = model or settings.kimi_model
@@ -96,6 +96,7 @@ class BaseAgent:
                 "model": self.model,
                 "messages": full_messages,
                 "temperature": self.temperature,
+                "top_p": 1,
                 "max_tokens": self.max_tokens,
                 "stream": stream,
             }
@@ -140,6 +141,25 @@ class BaseAgent:
         """Execute a streaming LLM call that returns an async iterator."""
         return await self._call_llm(messages=messages, stream=True)
 
+    @staticmethod
+    def _extract_content(message: Any) -> str:
+        """Extract text from an LLM response message.
+
+        Reasoning models (e.g. openai/gpt-oss-20b) return their output in
+        ``reasoning_content`` while ``content`` is None. This helper
+        transparently handles both standard and reasoning model responses.
+        """
+        reasoning = getattr(message, "reasoning_content", None)
+        if reasoning:
+            logger.info("agent.reasoning", reasoning=reasoning)
+            
+        content = message.content
+        if content:
+            return content
+        if reasoning:
+            return reasoning
+        return ""
+
     async def generate(self, user_message: str) -> str:
         """
         Simple text-in → text-out generation (no tool calling).
@@ -153,5 +173,4 @@ class BaseAgent:
         response = await self._call_llm(
             messages=[{"role": "user", "content": user_message}]
         )
-        content: str = response.choices[0].message.content or ""
-        return content.strip()
+        return self._extract_content(response.choices[0].message).strip()
